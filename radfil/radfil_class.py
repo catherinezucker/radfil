@@ -1,4 +1,10 @@
-from .profile_tools import *
+import numpy as np
+from fil_finder import fil_finder_2D
+from scipy.interpolate import splprep
+from scipy.interpolate import splev
+import matplotlib.pyplot as plt
+import sys
+import profile_tools
 
 class radfil(object):
 
@@ -17,9 +23,8 @@ class radfil(object):
     distance : float
         Distance to the filament; must be entered in pc
         
-    imgscale : float, optional
-        The physical size of each pixel in your image (in pc); only required if
-        header is not provided
+    header : astropy.io.fits.Header
+        The header corresponding to the image array
         
     spine_smooth_factor: integer, optional (default=10)
         The amount of smoothing to be applied to the skeleton spine. This is
@@ -35,39 +40,44 @@ class radfil(object):
         your own with the FilFinder package using the "make_fil_spine" method. 
     """
         
-def __init__(self, img, mask, distance, imgscale=None, spine_smooth_factor=None,
-                 cut_separation=None, filspine=None):    
+    def __init__(self, image, mask, header, distance, spine_smooth_factor=None,
+                    cut_separation=None, filspine=None):    
                  
-    if isinstance(image,np.ndarray)==False or isinstance(mask,np.ndarray)==False :
-        raise TypeError("Image and/or mask array is the wrong type; need type np.ndarray")
+        if isinstance(image,np.ndarray)==False or isinstance(mask,np.ndarray)==False :
+            raise TypeError("Image and/or mask array is the wrong type; need type np.ndarray")
 
-    if len(image.shape)!= 2 or len(mask.shape)!=2:
-        raise TypeError("Image and/or mask array must be 2D.")
+        if len(image.shape)!= 2 or len(mask.shape)!=2:
+            raise TypeError("Image and/or mask array must be 2D.")
         
-    if type(distance)!=np.float:
-        raise TypeError("Please enter a distance value in pc as a float")
+        if type(distance)!=np.float:
+            raise TypeError("Please enter a distance value in pc as a float")
         
-    self.image=image
-    self.header=header
-    self.distance=distance
-    
+        self.image=image
+        self.mask=mask
+        self.distance=distance
+        self.spine_smooth_factor=spine_smooth_factor
+        self.cut_separation=cut_separation
+        self.filspine=filspine
+        self.imgscale = header["CDELT2"] * (np.pi / 180.0) * distance
+
+
     
     def make_fil_spine(self,header,beamwidth=None,verbose=False):
 
-    """
-    Create filament spine using the FilFinder package 'shortest path' option
+        """
+        Create filament spine using the FilFinder package 'shortest path' option
     
-    Parameters
-    ------
-    header: FITS header
-        The header corresponding to the image array. 
+        Parameters
+        ------
+        header: FITS header
+            The header corresponding to the image array. 
         
-    beamwidth: float
-        A float in units of arcseconds indicating the beamwidth of the image array     
+        beamwidth: float
+            A float in units of arcseconds indicating the beamwidth of the image array     
         
-    verbose: boolean
-        A boolean indicating whether you want to enable FilFinder plotting of filament spine
-    """
+        verbose: boolean
+            A boolean indicating whether you want to enable FilFinder plotting of filament spine
+        """
     
         #Create a filament spine with the FilFinder package, using your image array and mask array 
         
@@ -94,38 +104,33 @@ def __init__(self, img, mask, distance, imgscale=None, spine_smooth_factor=None,
         
         return self
         
-    def build_profile(self,header,beamwidth=None,plot_cuts=True, plot_profiles=True):
+    def build_profile(self, beamwidth=None,plot_cuts=True,plot_samples=False, show_plots=True):
     
-    """
-    Build the filament profile using the inputted or recently created filament spine 
+        """
+        Build the filament profile using the inputted or recently created filament spine 
     
-    Parameters
-    ------
-    self: An instance of the radfil_class
+        Parameters
+        ------
+        self: An instance of the radfil_class
         
-    plot_cuts: boolean (default=True)
-        A boolean indicating whether you want to plot the local width lines across the spine
+        plot_cuts: boolean (default=True)
+            A boolean indicating whether you want to plot the local width lines across the spine
         
-    plot_samples: boolean (default=False)
-        A boolean indicating whether you want to plot the points at which the profiles are sampled 
+        plot_samples: boolean (default=False)
+            A boolean indicating whether you want to plot the points at which the profiles are sampled 
         
-    plot_profiles: boolean
-        A boolean indicating whether you want to plot the profiles for each cut
+        show_plots: boolean (default=True)
+            A boolean indicating whether you want to display the plots    
         
-    show_plots: boolean (default=True)
-        A boolean indicating whether you want to display the plots 
-        
-        
-    """
+        """
     
         #extract x and y coordinates of filament spine
-        pixcrd=np.where(self.filspine)==1)
+        pixcrd=np.where(self.filspine==1)
         x=pixcrd[1]
         y=pixcrd[0]
-        pts=np.vstack((x,y)).T
-    
+            
         #sort these points by distance along the spine
-        xx,yy=filfind_lengths.profile_tools.curveorder(x,y)
+        xx,yy=profile_tools.curveorder(x,y)
     
         #parameterize the filament spine by x values, y values, and order along the spine "t"
         t=np.arange(0,xx.shape[0],1)
@@ -148,33 +153,48 @@ def __init__(self, img, mask, distance, imgscale=None, spine_smooth_factor=None,
         #build plot
         fig=plt.figure(figsize=(10,10))
         ax=plt.gca()
-        plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary_r',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
+        plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
         plt.ylim(0,self.image.shape[0])
         plt.xlim(0,self.image.shape[1])
         plt.plot(xx,yy,'b',label='data',lw=2,alpha=0.5)
         plt.plot(xfit,yfit,'r',label='fit',lw=2,alpha=0.5)
 
-        self.xfit=xfit
-        self.yfit=yfit
-        self.points=points
-        self.fprime=yprime/xprime
-        self.m=-1.0/self.fprime
+        self.xfit=xfit[1:-1]
+        self.yfit=yfit[1:-1]
+        self.points=xfit[1:-1]
+        self.fprime=yprime[1:-1]/xprime[1:-1]
+        self.m=-1.0/(yprime[1:-1]/xprime[1:-1])
               
-        delta=0.25  
+        delta=0.25
         deltax=[]
-        for i in range(0,len(xfit.shape[0])):
-            arr1=np.array([[1,1],[1,-m[i]**2]])
+        for i in range(0,self.xfit.shape[0]):
+            arr1=np.array([[1,1],[1,-self.m[i]**2]])
             arr2=np.array([delta**2,0])
             solved = np.linalg.solve(arr1, arr2)
             y=np.sqrt(solved[0])+yfit[i]
             x=np.sqrt(solved[1])+xfit[i]
-            deltax.append(np.abs((x-xfit[i])))
+            deltax.append(np.abs((x-self.xfit[i])))
             
         self.deltax=np.array(deltax)
         
         leftx,rightx,lefty,righty,distpc=profile_tools.maskbounds(self,ax=ax)
+        self.leftx=leftx
+        self.rightx=rightx
+        self.lefty=lefty
+        self.righty=righty
+        
+        if self.leftx.shape[0] != self.points.shape[0]:
+            raise AssertionError("Missing point")
+        
         maxcolx,maxcoly=profile_tools.max_intensity(self,leftx,rightx,lefty,righty,ax=ax)
-        xaxis,yaxis=profile_tools.get_radial_prof(self,maxcolx,maxcoly,cutdist=3.0,ax=ax,plot_cuts=True,plot_samples=False):
+        #xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=3.0,plot_cuts=True,plot_samples=False)
+        
+        #masterx,mastery,std=make_master_prof(xtot,ytot)
+        
+        return self
+        
+
+    
         
 
         

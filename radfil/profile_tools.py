@@ -1,3 +1,10 @@
+import numpy as np
+import networkx as nx
+from sklearn.neighbors import NearestNeighbors
+import scipy
+import matplotlib.pyplot as plt
+import math
+
 def curveorder(x,y):
     """
     Sort pixels that make up the filament spine by the order in which they appear along the curve
@@ -14,10 +21,12 @@ def curveorder(x,y):
     xx, yy: the sorted x and y arrays given above
     
     """ 
-    pts=np.vstack((x,y))
-
+    
+    pts=np.vstack((x,y)).T
+    
     clf = NearestNeighbors(2).fit(pts)
     G = clf.kneighbors_graph()
+
 
     T = nx.from_scipy_sparse_matrix(G)
 
@@ -32,9 +41,8 @@ def curveorder(x,y):
     minidx = 0
 
     for i in range(len(pts)):
-        p = paths[i]   # order of nodes
-        ordered = pts[p]   # ordered nodes
-        
+        p = paths[i]           # order of nodes
+        ordered = pts[p]    # ordered nodes
         # find cost of that order by the sum of euclidean distances between points (i) and (i+1)
         cost = (((ordered[:-1] - ordered[1:])**2).sum(1)).sum()
         if cost < mindist:
@@ -107,7 +115,7 @@ def maskbounds(radobj,ax,plot_width=True):
     lefty=[]
     righty=[]
             
-    for i in range(0,len(points)):
+    for i in range(0,len(radobj.points)):
     
         #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
         a=radobj.points[i]
@@ -123,7 +131,11 @@ def maskbounds(radobj,ax,plot_width=True):
             findxbound=np.linspace(a-line*deltax,a+line*deltax,1000)
             findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
             
-            boundarr=filmask[findybound.astype(int),findxbound.astype(int)]
+            if (np.min(findxbound)<0) or (np.max(findxbound)>radobj.image.shape[1]-1) or (np.min(findybound)<0) or (np.max(findybound)>radobj.image.shape[0]-1):
+                print(a,line,'Bad point...skipping')
+                break
+            
+            boundarr=radobj.mask[findybound.astype(int),findxbound.astype(int)]
             halved=findxbound.shape[0]/2
 
             #Tests case when mask is entirely confined to either LHS or RHS of the spine
@@ -142,10 +154,10 @@ def maskbounds(radobj,ax,plot_width=True):
                 righty.append(fin_tanperp[-1])            
                                                     
                 dist = math.hypot(fin_x[0] - fin_x[-1], fin_tanperp[0] - fin_tanperp[-1])
-                distpc.append(dist*radobj.radobj.imagescale)
+                distpc.append(dist*radobj.imgscale)
                 
                 if plot_width==True:
-                    ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=0.3,zorder=2)  
+                    ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=1.0,zorder=2)  
                                            
                 break
                 
@@ -165,18 +177,18 @@ def maskbounds(radobj,ax,plot_width=True):
                 righty.append(fin_tanperp[-1])            
                                                     
                 dist = math.hypot(fin_x[0] - fin_x[-1], fin_tanperp[0] - fin_tanperp[-1])
-                distpc.append(dist*radobj.radobj.imagescale)
+                distpc.append(dist*radobj.imgscale)
                     
                 if plot_width==True:
-                    ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=0.3,zorder=2)   
+                    ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=1.0,zorder=2)   
                                         
                 break 
-
+                
     return (np.array(leftx),np.array(rightx),np.array(lefty),np.array(righty),np.array(distpc))
     
 def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
 
- """
+    """
     Determine the pixel along each of the local width lines with the maximum column density value
     
     Parameters:
@@ -205,11 +217,11 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
     maxcoly:
         1D array containing the y coordinates of the pixels with the maximum column density along each width line
         
- """
+    """
     maxcolx=[]
     maxcoly=[]
 
-    for i in range(0,len(points)):
+    for i in range(0,len(radobj.points)):
     
         #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
         a=radobj.points[i]
@@ -221,7 +233,8 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
         #Sample the line along the entire local width
         findxbound=np.linspace(np.min([leftx[i],rightx[i]]),np.max([leftx[i],rightx[i]]),100)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent line
-               
+        
+        print(i)
         #Determine unique pixel values along the local width
         unique,indices,inverse,counts=np.unique(radobj.image[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
     
@@ -246,9 +259,9 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
         
     return np.array(maxcolx),np.array(maxcoly)
     
-def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False):
+def get_radial_prof(radobj,maxcolx,maxcoly,ax,cutdist=3.0,plot_max=True,plot_all=False):
 
- """
+    """
     Return the radial profile along each perpendicular cut across the spine, shifted to the peak column density
     
     Parameters:
@@ -274,20 +287,20 @@ def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False)
         Do you want to plot the points at which you're sampling your radial column density profile? 
         
     Returns: 
-    xaxis: numpy.ndarray
+    xtot: numpy.ndarray
         2D array containing the radial distances from the peak column density pixel (defined to be r=0) for all perpendicular cuts
     
-    yaxis: numpy.ndarray
+    ytot: numpy.ndarray
         2D array containing the column densities corresponding to the radial distances stored in xaxis for all perpendicular cuts
         
- """
+     """
     
-    xaxis=[]
-    yaxis=[]
+    xtot=[]
+    ytot=[]
     
     indexedarr=np.cumsum(np.ones((radobj.image.shape))).reshape((radobj.image.shape))
     
-    for i in range(0,len(points)):
+    for i in range(0,len(radobj.points)):
         
         #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
         a=radobj.points[i]
@@ -336,8 +349,8 @@ def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False)
         coldensity=np.delete(coldensity,deletepts)
         extract=np.delete(extract,deletepts)
 
-        xaxis.append(radialdist)
-        yaxis.append(coldensity)
+        xtot.append(radialdist)
+        ytot.append(coldensity)
 
         if indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]].shape[0]!=np.unique(indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]]).shape[0]:
             raise AssertionError("Profile Has Repeat Column Density Value")
@@ -349,19 +362,18 @@ def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False)
 
     return np.array(xaxis),np.array(yaxis)
     
-<<<<<<< HEAD:profile_tools.py
     
-def make_master_prof(xtot,ytot):
+def make_master_prof(xtot,ytot,cutdist):
 
- """
-    Linearly interpolate profiles on to finer grid, bin the interpolated profiles, and take the median in each bin. 
+    """
+    Linearly interpolate profiles on to finer grid, bin the interpolated profiles, and take the median in each bin to determine "master" profile
     
     Parameters:
     xtot:
-       xtot
+        2D array containing the radial distances from the peak column density pixel (defined to be r=0) for all perpendicular cuts
        
-    leftx: numpy.ndarray
-        1D array containing x coordinates defining the LHS of each width line
+    ytot: numpy.ndarray
+        2D array containing the column densities corresponding to the radial distances stored in xaxis for all perpendicular cuts
         
     Returns: 
     masterx: numpy.ndarray
@@ -372,14 +384,14 @@ def make_master_prof(xtot,ytot):
         
     std: numpy.ndarray
         1D array containing the standard deviation of the column density in each bin
- """
+    """
 
     xcomp=np.hstack(xtot)
     ycomp=np.hstack(ytot)
-    bins=np.linspace(-fitdist,fitdist,int(fitdist*2/0.05))
+    bins=np.linspace(-cutdist,cutdist,120)
     binorder=np.argsort(xcomp)
-    xplot=xcomp[binorder]
-    yplot=ycomp[binorder]
+    xcomp=xcomp[binorder]
+    ycomp=ycomp[binorder]
     inds = np.digitize(xcomp, bins)
 
     masterx=[]
@@ -399,7 +411,6 @@ def make_master_prof(xtot,ytot):
     mastery=mastery[mask][1:-1]
     std=std[mask][1:-1]
     
-    return(masterx,mastery,std)
+    return masterx,mastery,std
     
-=======
->>>>>>> e1e59ee5f9467c6a5d36e7b64bcbfdb3b19552c1:radfil/profile_tools.py
+
