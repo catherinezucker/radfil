@@ -49,18 +49,19 @@ def curveorder(x,y):
     return(xx,yy)
     
     
-def maskbounds(points,radobj,ax,plot_width=True):
+def maskbounds(radobj,ax,plot_width=True):
 
     """
     Determine where the perpendicular cuts touch the mask on either side of the spine. These define
     each of the "local width lines" perpendicular to the smoothed filament spine 
     
     Parameters:
-    points: numpy.ndarray
-       A 1d array specifying the x coordinates of the pixels at which you want to sample the widths
        
     radobj:
        An instance of the radfil_class which now contain the following relevant attributes: 
+       
+        points: numpy.ndarray
+            A 1d array specifying the x coordinates of the pixels at which you want to sample the widths
     
         imgscale: float
             The physical size of each pixel in pc
@@ -97,9 +98,7 @@ def maskbounds(points,radobj,ax,plot_width=True):
     lefty: array containing the y coordinates on the LHS of each width line
     righty: array containing the y coordinates on the RHS of each width line
     distpc: array containing the width of each line
-    finalpts: array of the final tangent points defining each width line.    
     """ 
-    
     dist=[]
     distpc=[]
     finalpts=[]
@@ -110,32 +109,24 @@ def maskbounds(points,radobj,ax,plot_width=True):
             
     for i in range(0,len(points)):
     
-        #Determine the parameters defining the equation of the line perpendicular to the tangent
-        a=points[i]
-        argmin=np.argmin(np.abs(radobj.xfit-np.ones((radobj.xfit.shape[0]))*a))
-        fa=radobj.yfit[argmin]   
-        fprime=radobj.yprime[argmin]/radobj.xprime[argmin]
-        m=-1.0/fprime
-        deltay=.1
-                
-        deltax=(deltay/np.absolute(m))
-        linerange=np.arange(1,10000,1)
+        #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
+        a=radobj.points[i]
+        fa=radobj.yfit[i]
+        fprime=radobj.fprime[i]
+        m=radobj.m[i]
+        deltax=radobj.deltax[i]
+
+        #Iteratively increase the length of the width line outwards from the tangent point until you reach both sides of filament mask
+        linerange=np.arange(1,1000,1)
                     
-        #Iteratively increase the length of the width line outwards from the tangent point until you reach both sides of filament radobj.mask
         for line in linerange:
-        
-            findxbound=np.linspace(a-line*deltax,a+line*deltax,100)
-            findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent line
+            findxbound=np.linspace(a-line*deltax,a+line*deltax,1000)
+            findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
             
-            #The program will fail if you have a slope ---> infinity or 0. Discard these points!
-            if (np.min(findxbound)<0) or (np.max(findxbound)>radobj.image.shape[1]-1) or (np.min(findybound)<0) or (np.max(findybound)>radobj.image.shape[0]-1):
-                print(a,'Bad point...skipping')
-                break
-            
-            boundarr=radobj.mask[findybound.astype(int),findxbound.astype(int)]
+            boundarr=filmask[findybound.astype(int),findxbound.astype(int)]
             halved=findxbound.shape[0]/2
 
-            #Is the radobj.mask entirely confined to either LHS or RHS of the spine?
+            #Tests case when mask is entirely confined to either LHS or RHS of the spine
             if ((np.any(boundarr[:halved])==True and np.count_nonzero(boundarr[halved:])==0)==True or (np.any(boundarr[halved:])==True and np.count_nonzero(boundarr[:halved])==0)==True):
                     
                 lhs = np.where(boundarr==1)[0][0]
@@ -155,12 +146,10 @@ def maskbounds(points,radobj,ax,plot_width=True):
                 
                 if plot_width==True:
                     ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=0.3,zorder=2)  
-                    
-                finalpts.append(a)
-                       
+                                           
                 break
                 
-            #Or is there radobj.mask on both sides of the tangent point?
+            #Tests case when mask is on both sides of spine
             if (np.all(boundarr[:halved])==0 and np.all(boundarr[halved:])==0 and np.any(boundarr)==1)==True:
 
                 lhs = np.where(boundarr[:halved]==0)[0][-1]
@@ -180,21 +169,17 @@ def maskbounds(points,radobj,ax,plot_width=True):
                     
                 if plot_width==True:
                     ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=0.3,zorder=2)   
-                    
-                finalpts.append(a)
-                    
+                                        
                 break 
 
-    return (np.array(leftx),np.array(rightx),np.array(lefty),np.array(righty),np.array(distpc),np.array(finalpts))
+    return (np.array(leftx),np.array(rightx),np.array(lefty),np.array(righty),np.array(distpc))
     
-def max_intensity(points,radobj,leftx,rightx,lefty,righty,ax):
+def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
 
  """
     Determine the pixel along each of the local width lines with the maximum column density value
     
     Parameters:
-    finalpts: list of the final tangent points defining each width line.    
-
     radobj:
        An instance of the radfil_class which contains all the relevant attributes described in maskbounds function above
        
@@ -226,12 +211,12 @@ def max_intensity(points,radobj,leftx,rightx,lefty,righty,ax):
 
     for i in range(0,len(points)):
     
-        #Determine the parameters defining the equation of the line perpendicular to the tangent
-        a=points[i]
-        argmin=np.argmin(np.abs(radobj.xfit-np.ones((radobj.xfit.shape[0]))*a))
-        fa=radobj.yfit[argmin]   
-        fprime=radobj.yprime[argmin]/radobj.xprime[argmin]
-        m=-1.0/fprime
+        #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
+        a=radobj.points[i]
+        fa=radobj.yfit[i]
+        fprime=radobj.fprime[i]
+        m=radobj.m[i]
+        deltax=radobj.deltax[i]
                 
         #Sample the line along the entire local width
         findxbound=np.linspace(np.min([leftx[i],rightx[i]]),np.max([leftx[i],rightx[i]]),100)
@@ -261,14 +246,12 @@ def max_intensity(points,radobj,leftx,rightx,lefty,righty,ax):
         
     return np.array(maxcolx),np.array(maxcoly)
     
-def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=True):
+def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False):
 
  """
-    Return the radial profile along each perpendicular cut across the spine, shifted to the peak column density along each local width line
+    Return the radial profile along each perpendicular cut across the spine, shifted to the peak column density
     
     Parameters:
-    finalpts: list of the final tangent points defining each width line.    
-
     radobj:
        An instance of the radfil_class which contains all the relevant attributes described in maskbounds function above
        
@@ -292,35 +275,29 @@ def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all
         
     Returns: 
     xaxis: numpy.ndarray
-        1D array containing the radial distances from the peak column density pixel (defined to be r=0)
+        2D array containing the radial distances from the peak column density pixel (defined to be r=0) for all perpendicular cuts
     
     yaxis: numpy.ndarray
-        1D array containing the column densities corresponding to the radial distances stored in xaxis 
+        2D array containing the column densities corresponding to the radial distances stored in xaxis for all perpendicular cuts
         
  """
     
     xaxis=[]
     yaxis=[]
     
-    indexedarr=np.cumsum(np.ones((img.shape))).reshape((img.shape))
+    indexedarr=np.cumsum(np.ones((radobj.image.shape))).reshape((radobj.image.shape))
     
     for i in range(0,len(points)):
-        a=points[i]
-        argmin=np.argmin(np.abs(radobj.xfit-np.ones((radobj.xfit.shape[0]))*a))
-        fa=yfit[argmin]   
-        fprime=yprime[argmin]/xprime[argmin]
-        m=-1.0/fprime
         
-        deltaylower=fa-3
-        deltayupper=radobj.image.shape[0]-fa-3
-        deltaxlower=(deltaylower/np.absolute(m))
-        deltaxupper=(deltayupper/np.absolute(m))
+        #Instantiate the parameters defining the equation of the line perpendicular to the tangent at the given point
+        a=radobj.points[i]
+        fa=radobj.yfit[i]
+        fprime=radobj.fprime[i]
+        m=radobj.m[i]
+        deltax=radobj.deltax[i]
+        deltamax=(cutdist/radobj.imagescale)*np.sqrt(2)
         
-        if np.sign(m)==-1:
-            findxbound=np.linspace(np.clip(a-deltaxupper,0,a),np.clip(a+deltaxlower,a,radobj.image.shape[1]-3),100000)
-        else:
-            findxbound=np.linspace(np.clip(a-deltaxlower,0,a),np.clip(a+deltaxupper,a,radobj.image.shape[1]-3),100000)
-            
+        findxbound=np.linspace(a-deltamax, a+deltamax, 1000)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
 
         unique,indices,inverse,counts=np.unique(indexedarr[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
@@ -338,6 +315,7 @@ def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all
 
         coldensity=radobj.image[findybound.astype(int)[extract],findxbound.astype(int)[extract]]
 
+        #build radial distance array out from the pixel of maximum column density 
         radialdist=[]
         center = np.where(((findxbound.astype(int)[extract]==maxcolx[i]) & (findybound.astype(int)[extract]==maxcoly[i]))==True)[0]
         centerx=findxbound[extract][center]
@@ -345,11 +323,14 @@ def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all
         for pt in zip(findxbound[extract],findybound[extract]):
             radialdist.append(math.hypot(pt[0] - centerx, pt[1] - centery))
 
+        #convert to physical units
         radialdist=np.array(radialdist)*radobj.imgscale
  
+        #designate one side of spine as negative side
         leftspine=np.where(findxbound[extract]<centerx)
         radialdist[leftspine[0]]=radialdist[leftspine[0]]*-1
 
+        #delete points beyond the cut distance
         deletepts=np.where(np.abs(radialdist)>cutdist)
         radialdist=np.delete(radialdist,deletepts)
         coldensity=np.delete(coldensity,deletepts)
@@ -359,7 +340,7 @@ def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all
         yaxis.append(coldensity)
 
         if indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]].shape[0]!=np.unique(indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]]).shape[0]:
-            print(a,"Something is wrong!!! Profile has repeat column density values")
+            raise AssertionError("Profile Has Repeat Column Density Value")
 
         if plot_all==True:
             ax.scatter(findxbound[extract],findybound[extract],c='green',edgecolor="None",zorder=4,s=20)
@@ -367,4 +348,55 @@ def get_radial_prof(points,maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all
             ax.scatter(centerx,centery,c='blue',edgecolor="None",zorder=4,s=20,marker='o',alpha=0.3)
 
     return np.array(xaxis),np.array(yaxis)
+    
+    
+def make_master_prof(xtot,ytot):
+
+ """
+    Linearly interpolate profiles on to finer grid, bin the interpolated profiles, and take the median in each bin. 
+    
+    Parameters:
+    xtot:
+       xtot
+       
+    leftx: numpy.ndarray
+        1D array containing x coordinates defining the LHS of each width line
+        
+    Returns: 
+    masterx: numpy.ndarray
+        1D array containing the median radial distance in each bin
+    
+    mastery: numpy.ndarray
+        1D array containing the median column density each bin
+        
+    std: numpy.ndarray
+        1D array containing the standard deviation of the column density in each bin
+ """
+
+    xcomp=np.hstack(xtot)
+    ycomp=np.hstack(ytot)
+    bins=np.linspace(-fitdist,fitdist,int(fitdist*2/0.05))
+    binorder=np.argsort(xcomp)
+    xplot=xcomp[binorder]
+    yplot=ycomp[binorder]
+    inds = np.digitize(xcomp, bins)
+
+    masterx=[]
+    mastery=[]
+    std=[]
+    for i in range(0,np.max(inds)):
+        masterx.append(np.nanmedian(xcomp[np.where(inds==i)]))
+        mastery.append(np.nanmedian(ycomp[np.where(inds==i)]))
+        std.append(np.nanstd(ycomp[np.where(inds==i)]))
+
+    masterx=np.array(masterx)
+    mastery=np.array(mastery)
+    std=np.array(std)
+    
+    mask=np.isfinite(masterx)
+    masterx=masterx[mask][1:-1]
+    mastery=mastery[mask][1:-1]
+    std=std[mask][1:-1]
+    
+    return(masterx,mastery,std)
     
