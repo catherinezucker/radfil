@@ -349,6 +349,7 @@ def get_radial_prof(maxcolx,maxcoly,cutdist=3.0,ax,plot_max=True,plot_all=False)
 
     return np.array(xaxis),np.array(yaxis)
     
+<<<<<<< HEAD:profile_tools.py
     
 def make_master_prof(xtot,ytot):
 
@@ -400,3 +401,5 @@ def make_master_prof(xtot,ytot):
     
     return(masterx,mastery,std)
     
+=======
+>>>>>>> e1e59ee5f9467c6a5d36e7b64bcbfdb3b19552c1:radfil/profile_tools.py
