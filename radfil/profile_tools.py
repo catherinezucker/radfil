@@ -4,6 +4,8 @@ from sklearn.neighbors import NearestNeighbors
 import scipy
 import matplotlib.pyplot as plt
 import math
+from scipy.interpolate import interp1d
+
 
 def curveorder(x,y):
     """
@@ -125,19 +127,21 @@ def maskbounds(radobj,ax,plot_width=True):
         deltax=radobj.deltax[i]
 
         #Iteratively increase the length of the width line outwards from the tangent point until you reach both sides of filament mask
-        linerange=np.arange(1,1000,1)
+        linerange=np.arange(0,10000,1)
                     
         for line in linerange:
+        
             findxbound=np.linspace(a-line*deltax,a+line*deltax,1000)
             findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
             
             if (np.min(findxbound)<0) or (np.max(findxbound)>radobj.image.shape[1]-1) or (np.min(findybound)<0) or (np.max(findybound)>radobj.image.shape[0]-1):
-                print(a,line,'Bad point...skipping')
+                print(a,'Bad point...skipping')
+                np.save("boundarr_test", boundarr)
                 break
             
             boundarr=radobj.mask[findybound.astype(int),findxbound.astype(int)]
             halved=findxbound.shape[0]/2
-
+            
             #Tests case when mask is entirely confined to either LHS or RHS of the spine
             if ((np.any(boundarr[:halved])==True and np.count_nonzero(boundarr[halved:])==0)==True or (np.any(boundarr[halved:])==True and np.count_nonzero(boundarr[:halved])==0)==True):
                     
@@ -234,7 +238,6 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
         findxbound=np.linspace(np.min([leftx[i],rightx[i]]),np.max([leftx[i],rightx[i]]),100)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent line
         
-        print(i)
         #Determine unique pixel values along the local width
         unique,indices,inverse,counts=np.unique(radobj.image[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
     
@@ -258,8 +261,8 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
         maxcoly.append(int(findybound[extract[argmax]]))
         
     return np.array(maxcolx),np.array(maxcoly)
-    
-def get_radial_prof(radobj,maxcolx,maxcoly,ax,cutdist=3.0,plot_max=True,plot_all=False):
+        
+def get_radial_prof(radobj,maxcolx,maxcoly,ax=None,cutdist=3.0,plot_max=True,plot_samples=False):
 
     """
     Return the radial profile along each perpendicular cut across the spine, shifted to the peak column density
@@ -308,9 +311,9 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax,cutdist=3.0,plot_max=True,plot_all
         fprime=radobj.fprime[i]
         m=radobj.m[i]
         deltax=radobj.deltax[i]
-        deltamax=(cutdist/radobj.imagescale)*np.sqrt(2)
-        
-        findxbound=np.linspace(a-deltamax, a+deltamax, 1000)
+        deltamax=radobj.deltamax[i]
+                
+        findxbound=np.linspace(a-deltamax,a+deltamax,1000)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
 
         unique,indices,inverse,counts=np.unique(indexedarr[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
@@ -355,15 +358,15 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax,cutdist=3.0,plot_max=True,plot_all
         if indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]].shape[0]!=np.unique(indexedarr[findybound.astype(int)[extract],findxbound.astype(int)[extract]]).shape[0]:
             raise AssertionError("Profile Has Repeat Column Density Value")
 
-        if plot_all==True:
+        if plot_samples==True:
             ax.scatter(findxbound[extract],findybound[extract],c='green',edgecolor="None",zorder=4,s=20)
         if plot_max==True:
             ax.scatter(centerx,centery,c='blue',edgecolor="None",zorder=4,s=20,marker='o',alpha=0.3)
 
-    return np.array(xaxis),np.array(yaxis)
+    return np.array(xtot),np.array(ytot)
     
     
-def make_master_prof(xtot,ytot,cutdist):
+def make_master_prof(xtot,ytot,cutdist=3.0):
 
     """
     Linearly interpolate profiles on to finer grid, bin the interpolated profiles, and take the median in each bin to determine "master" profile
@@ -385,22 +388,34 @@ def make_master_prof(xtot,ytot,cutdist):
     std: numpy.ndarray
         1D array containing the standard deviation of the column density in each bin
     """
+    
+    #Interpolate linearly between sample points
+    xinterp=[]
+    yinterp=[]
+    for i in range(0,len(xtot)):
+        sample=np.linspace(np.trunc(np.min(xtot[i])),np.trunc(np.max(xtot[i])),1000)
+        f = interp1d(xtot[i], ytot[i])
+        xresamp=sample
+        yresamp=f(sample)
+        xinterp.append(xresamp)
+        yinterp.append(yresamp)
 
-    xcomp=np.hstack(xtot)
-    ycomp=np.hstack(ytot)
-    bins=np.linspace(-cutdist,cutdist,120)
-    binorder=np.argsort(xcomp)
-    xcomp=xcomp[binorder]
-    ycomp=ycomp[binorder]
-    inds = np.digitize(xcomp, bins)
+    xinterp=np.hstack(xinterp)
+    yinterp=np.hstack(yinterp)
+    
+    bins=np.linspace(-cutdist,cutdist,int(cutdist*2/0.05))
+    binorder=np.argsort(xinterp)
+    xinterp=xinterp[binorder]
+    yinterp=yinterp[binorder]
+    inds = np.digitize(xinterp, bins)
 
     masterx=[]
     mastery=[]
     std=[]
     for i in range(0,np.max(inds)):
-        masterx.append(np.nanmedian(xcomp[np.where(inds==i)]))
-        mastery.append(np.nanmedian(ycomp[np.where(inds==i)]))
-        std.append(np.nanstd(ycomp[np.where(inds==i)]))
+        masterx.append(np.nanmedian(xinterp[np.where(inds==i)]))
+        mastery.append(np.nanmedian(yinterp[np.where(inds==i)]))
+        std.append(np.nanstd(yinterp[np.where(inds==i)]))
 
     masterx=np.array(masterx)
     mastery=np.array(mastery)
@@ -411,6 +426,6 @@ def make_master_prof(xtot,ytot,cutdist):
     mastery=mastery[mask][1:-1]
     std=std[mask][1:-1]
     
-    return masterx,mastery,std
+    return(masterx,mastery,std)
     
 

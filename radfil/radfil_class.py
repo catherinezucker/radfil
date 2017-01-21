@@ -104,7 +104,7 @@ class radfil(object):
         
         return self
         
-    def build_profile(self, beamwidth=None,plot_cuts=True,plot_samples=False, show_plots=True):
+    def build_profile(self, cutdist=3.0,plot_cuts=True,plot_samples=False):
     
         """
         Build the filament profile using the inputted or recently created filament spine 
@@ -153,43 +153,60 @@ class radfil(object):
         #build plot
         fig=plt.figure(figsize=(10,10))
         ax=plt.gca()
-        plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
+        plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary_r',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
         plt.ylim(0,self.image.shape[0])
         plt.xlim(0,self.image.shape[1])
         plt.plot(xx,yy,'b',label='data',lw=2,alpha=0.5)
         plt.plot(xfit,yfit,'r',label='fit',lw=2,alpha=0.5)
 
-        self.xfit=xfit[1:-1]
-        self.yfit=yfit[1:-1]
-        self.points=xfit[1:-1]
-        self.fprime=yprime[1:-1]/xprime[1:-1]
-        self.m=-1.0/(yprime[1:-1]/xprime[1:-1])
+        self.xfit=xfit[1:-1:5]
+        self.yfit=yfit[1:-1:5]
+        self.points=xfit[1:-1:5]
+        self.fprime=yprime[1:-1:5]/xprime[1:-1:5]
+        self.m=-1.0/(yprime[1:-1:5]/xprime[1:-1:5])
               
-        delta=0.25
+        delta=1.0
         deltax=[]
-        for i in range(0,self.xfit.shape[0]):
+        for i in range(0,self.points.shape[0]):
             arr1=np.array([[1,1],[1,-self.m[i]**2]])
             arr2=np.array([delta**2,0])
             solved = np.linalg.solve(arr1, arr2)
-            y=np.sqrt(solved[0])+yfit[i]
-            x=np.sqrt(solved[1])+xfit[i]
-            deltax.append(np.abs((x-self.xfit[i])))
+            y=np.sqrt(solved[0])+self.yfit[i]
+            x=np.sqrt(solved[1])+self.xfit[i]
+            deltax.append(np.sqrt(np.abs(solved[1])))
             
         self.deltax=np.array(deltax)
         
         leftx,rightx,lefty,righty,distpc=profile_tools.maskbounds(self,ax=ax)
-        self.leftx=leftx
-        self.rightx=rightx
-        self.lefty=lefty
-        self.righty=righty
         
-        if self.leftx.shape[0] != self.points.shape[0]:
+        self.distpc=distpc
+                
+        if leftx.shape[0]!= self.points.shape[0]:
             raise AssertionError("Missing point")
         
         maxcolx,maxcoly=profile_tools.max_intensity(self,leftx,rightx,lefty,righty,ax=ax)
-        #xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=3.0,plot_cuts=True,plot_samples=False)
         
-        #masterx,mastery,std=make_master_prof(xtot,ytot)
+        self.maxcolx=maxcolx
+        self.maxcoly=maxcoly
+        
+        delta=np.clip((cutdist+1)/self.imgscale,(np.max(distpc)+1)/self.imgscale,np.inf)
+        deltamax=[]
+        for i in range(0,self.points.shape[0]):
+            arr1=np.array([[1,1],[1,-self.m[i]**2]])
+            arr2=np.array([delta**2,0])
+            solved = np.linalg.solve(arr1, arr2)
+            y=np.sqrt(solved[0])+self.maxcoly[i]
+            x=np.sqrt(solved[1])+self.maxcolx[i]
+            deltamax.append(np.sqrt(np.abs(solved[1])))
+            
+        self.deltamax=deltamax
+        
+        xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=3.0,plot_max=True,plot_samples=False)
+        
+        masterx,mastery,std=profile_tools.make_master_prof(xtot,ytot)
+        
+        self.masterx=masterx
+        self.mastery=mastery
         
         return self
         
