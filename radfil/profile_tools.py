@@ -361,7 +361,7 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax=None,cutdist=3.0,plot_max=True,plo
         if plot_samples==True:
             ax.scatter(findxbound[extract],findybound[extract],c='green',edgecolor="None",zorder=4,s=20)
         if plot_max==True:
-            ax.scatter(centerx,centery,c='blue',edgecolor="None",zorder=4,s=20,marker='o',alpha=0.3)
+            ax.scatter(centerx,centery,c='blue',edgecolor="None",zorder=4,s=20,marker='o',alpha=0.5)
 
     return np.array(xtot),np.array(ytot)
     
@@ -389,16 +389,23 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
         1D array containing the standard deviation of the column density in each bin
     """
     
+    fig=plt.figure(figsize=(8,8))
+    
     #Interpolate linearly between sample points
     xinterp=[]
     yinterp=[]
     for i in range(0,len(xtot)):
-        sample=np.linspace(np.trunc(np.min(xtot[i])),np.trunc(np.max(xtot[i])),1000)
+        sample=np.linspace(float("%.2f" % (int(np.min(xtot[i])*100)/float(100))),float("%.2f" % (int(np.max(xtot[i])*100)/float(100))),1000) #truncate to 2 decimal places
         f = interp1d(xtot[i], ytot[i])
         xresamp=sample
         yresamp=f(sample)
         xinterp.append(xresamp)
         yinterp.append(yresamp)
+        plt.plot(xtot[i],ytot[i],c='k',alpha=0.1)
+        
+    plt.xlim(-cutdist,cutdist)
+    plt.xlabel("Radial Distance (pc)")
+    plt.ylabel(r"$\rm H_2 \; Column \; Density \;(cm^{-2})$")
 
     xinterp=np.hstack(xinterp)
     yinterp=np.hstack(yinterp)
@@ -425,6 +432,8 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
     masterx=masterx[mask][1:-1]
     mastery=mastery[mask][1:-1]
     std=std[mask][1:-1]
+    
+    plt.plot(masterx,mastery)
     
     return(masterx,mastery,std)
     

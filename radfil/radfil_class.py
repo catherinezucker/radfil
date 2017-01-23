@@ -1,10 +1,28 @@
 import numpy as np
+import types
 from fil_finder import fil_finder_2D
 from scipy.interpolate import splprep
 from scipy.interpolate import splev
 import matplotlib.pyplot as plt
+import lmfit
+from lmfit.models import Model
+from lmfit import Parameters
 import sys
 import profile_tools
+
+
+def plummer(r,N_0,R_flat,p):
+    return (N_0)/(1+(r/R_flat)**2)**((p-1)/2.0)
+            
+def plummer_bg(r,N_0,R_flat,p,bg):
+    return (N_0)/(1+(r/R_flat)**2)**((p-1)/2.0) + bg
+            
+def gaussian(x, amp, wid):
+    return (amp) * np.exp(-1 * np.power(x, 2) / (2 * np.power(wid, 2)))
+            
+def gaussian_bg(x, amp, wid, bg):
+    return (amp) * np.exp(-1 * np.power(x, 2) / (2 * np.power(wid, 2))) + bg
+
 
 class radfil(object):
 
@@ -151,19 +169,19 @@ class radfil(object):
         xprime,yprime,zprime = splev(u,tckp,der=1)
         
         #build plot
-        fig=plt.figure(figsize=(10,10))
+        fig=plt.figure(figsize=(8,8))
         ax=plt.gca()
         plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary_r',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
         plt.ylim(0,self.image.shape[0])
         plt.xlim(0,self.image.shape[1])
-        plt.plot(xx,yy,'b',label='data',lw=2,alpha=0.5)
+        #plt.plot(xx,yy,'b',label='data',lw=2,alpha=0.5)
         plt.plot(xfit,yfit,'r',label='fit',lw=2,alpha=0.5)
 
-        self.xfit=xfit[1:-1:5]
-        self.yfit=yfit[1:-1:5]
-        self.points=xfit[1:-1:5]
-        self.fprime=yprime[1:-1:5]/xprime[1:-1:5]
-        self.m=-1.0/(yprime[1:-1:5]/xprime[1:-1:5])
+        self.xfit=xfit[1:-1:3]
+        self.yfit=yfit[1:-1:3]
+        self.points=xfit[1:-1:3]
+        self.fprime=yprime[1:-1:3]/xprime[1:-1:3]
+        self.m=-1.0/(yprime[1:-1:3]/xprime[1:-1:3])
               
         delta=1.0
         deltax=[]
@@ -204,14 +222,119 @@ class radfil(object):
         xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=3.0,plot_max=True,plot_samples=False)
         
         masterx,mastery,std=profile_tools.make_master_prof(xtot,ytot)
+        mastery=mastery/10**22
+        mastery=mastery.astype(float)
+        
+        std=std/10**22
+        std=std.astype(float)
         
         self.masterx=masterx
         self.mastery=mastery
+        self.std=std
+        
+        self.cutdist=cutdist
         
         return self
         
-
+    def fit_profile(self,model="Gaussian",fitdist=None,params=None,fit_bg=False,filname="Filament Profile Fitting"):
     
+        """
+        Fit a model to the filament's master profile 
+    
+        Parameters
+        ------
+        self: An instance of the radfil_class
+        
+        model: str or function
+            If you'd like to fit the built-in models, choose from either "Plummer" or "Gaussian"
+            If you'd like to fit your own model, input your function
+            
+        fitdist: the radial distance you'd like to fit to (must be <= cutdist); default=cutdist
+            
+        params: an lmfit.Parameters object, optional
+            If you're using your own model, will have to input an lmfit.Parameters instance
+        
+        fit_bg= boolean, optional (default=False)
+            Would you like to fit a background parameter as part of the built-in Plummer-like/Gaussian models?
+            
+        filname= str,optional
+            If you would like to title your plot with the name of the filament
+        
+        """
+        
+        if fitdist==None:
+            fitdist=self.cutdist
+                
+        if isinstance(model, types.FunctionType)==False and model!="Gaussian" and model!="Plummer":            
+            raise ValueError("Please enter a valid model")
+          
+        if isinstance(model, types.FunctionType)==True:
+        
+            if type(params)!=lmfit.parameter.Parameters:
+                raise ValueError("Please enter a valid parameter object")
+                
+            mod=Model(model)
+            params=params
+            
+        include=np.where(np.abs(self.masterx)<fitdist)
+              
+        if model=="Plummer" and fit_bg==False:
+            mod=Model(plummer)
+            params = Parameters()
+            params.add('N_0', value=np.max(self.mastery[include]))
+            params.add('R_flat', value=np.median(self.distpc)/2.0)
+            params.add('p', value=2.0)
+            
+        if model=="Plummer" and fit_bg==True:
+            mod=Model(plummer_bg)
+            params = Parameters()
+            params.add('N_0', value=np.max(self.mastery[include])-np.min(self.mastery[include]))
+            params.add('R_flat', value=np.median(self.distpc)/2.0)
+            params.add('p', value=2.0)
+            params.add('bg', value=np.min(self.mastery[include]))
+            
+        if model=="Gaussian" and fit_bg==False:
+            mod=Model(gaussian)
+            params=Parameters()
+            params.add('amp',value=np.max(self.mastery[include]))
+            params.add('width',value=np.median(self.distpc))
+            
+        if model=="Gaussian" and fit_bg==True:
+            mod=Model(gaussian_bg)
+            params=Parameters()
+            params.add('amp',value=np.max(self.mastery[include])-np.min(self.mastery[include]))
+            params.add('width',value=np.median(self.distpc))
+            params.add('bg',value=np.min(self.mastery[include]))
+            
+            
+        result = mod.fit(self.mastery[include],r=self.masterx[include],params=params)
+    
+        fig, ax = plt.subplots(nrows=1, ncols=2,figsize=(20,5))
+        plt.suptitle("{}".format(filname),fontsize=30)
+                
+        ax[0].scatter(self.masterx, self.mastery, c='b',label="Data",edgecolor='None')
+        ax[0].plot(self.masterx[include], result.best_fit, 'y-',label="Model Fit",lw=2)
+        ax[0].fill_between(self.masterx, self.mastery-self.std, self.mastery+self.std,color='gray',alpha=0.25)
+        ax[0].set_xlim(-self.cutdist,self.cutdist)
+        ax[0].axvline(-fitdist,c='k',ls='dashed',alpha=0.3)
+        ax[0].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
+        ax[0].set_xlabel("Radial distance (pc)",fontsize=20)
+        ax[0].set_ylabel(r"$\rm H_2 \; Column \; Density \;(10^{22} \; cm^{-2})$",fontsize=20)
+        
+        numparams=len(result.best_values.items())
+        textpos=np.linspace(0.95-0.05*numparams,0.95,numparams)
+        for i in range(0,numparams):
+            ax[0].text(0.03, textpos[i],"{}={:.2f}".format(result.best_values.items()[i][0],result.best_values.items()[i][1]), 
+                        horizontalalignment='left',verticalalignment='top', fontsize=15, fontweight='bold',transform=ax[0].transAxes)
+    
+        ax[1].plot(self.masterx[include], result.residual, 'r-',label="Residuals",lw=2)
+        ax[1].set_xlim(-fitdist,fitdist)
+        ax[1].set_ylim(-0.25,0.25)
+        ax[1].set_xlabel("Radial distance (pc)",fontsize=20)
+        ax[1].legend()        
+        
+        return self
+       
         
 
         
