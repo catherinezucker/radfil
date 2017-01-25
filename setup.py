@@ -12,7 +12,8 @@ setup(name='RadFil',
           'networkx',
           'numpy',
           'scipy',
-          'astropy'
+          'astropy',
+          'lmfit'           
       ],
       test_suite='musca.collector',
       tests_require=['musca'],
