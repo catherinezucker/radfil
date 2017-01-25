@@ -8,7 +8,8 @@ import lmfit
 from lmfit.models import Model
 from lmfit import Parameters
 import sys
-import profile_tools
+from radfil import profile_tools
+from astropy import units as u 
 
 
 def plummer(r,N_0,R_flat,p):
@@ -17,11 +18,11 @@ def plummer(r,N_0,R_flat,p):
 def plummer_bg(r,N_0,R_flat,p,bg):
     return (N_0)/(1+(r/R_flat)**2)**((p-1)/2.0) + bg
             
-def gaussian(x, amp, wid):
-    return (amp) * np.exp(-1 * np.power(x, 2) / (2 * np.power(wid, 2)))
+def gaussian(r, amp, wid):
+    return (amp) * np.exp(-1 * np.power(r, 2) / (2 * np.power(wid, 2)))
             
-def gaussian_bg(x, amp, wid, bg):
-    return (amp) * np.exp(-1 * np.power(x, 2) / (2 * np.power(wid, 2))) + bg
+def gaussian_bg(r, amp, wid, bg):
+    return (amp) * np.exp(-1 * np.power(r, 2) / (2 * np.power(wid, 2))) + bg
 
 
 class radfil(object):
@@ -37,12 +38,12 @@ class radfil(object):
     mask: numpy.ndarray
         A 2D array defining the shape of the filament; must be of boolean
         type and the same shape as the image array 
-        
-    distance : float
-        Distance to the filament; must be entered in pc
-        
+            
     header : astropy.io.fits.Header
         The header corresponding to the image array
+        
+    distance : float or int
+        Distance to the filament; must be entered in pc
         
     spine_smooth_factor: integer, optional (default=10)
         The amount of smoothing to be applied to the skeleton spine. This is
@@ -58,8 +59,7 @@ class radfil(object):
         your own with the FilFinder package using the "make_fil_spine" method. 
     """
         
-    def __init__(self, image, mask, header, distance, spine_smooth_factor=None,
-                    cut_separation=None, filspine=None):    
+    def __init__(self, image, mask, header, distance, filspine=None):    
                  
         if isinstance(image,np.ndarray)==False or isinstance(mask,np.ndarray)==False :
             raise TypeError("Image and/or mask array is the wrong type; need type np.ndarray")
@@ -67,29 +67,23 @@ class radfil(object):
         if len(image.shape)!= 2 or len(mask.shape)!=2:
             raise TypeError("Image and/or mask array must be 2D.")
         
-        if type(distance)!=np.float:
-            raise TypeError("Please enter a distance value in pc as a float")
+        if isinstance(distance,float)== False and isinstance(distance,int)==False:
+            raise TypeError("Please enter a distance value in pc")
         
         self.image=image
         self.mask=mask
+        self.header=header
         self.distance=distance
-        self.spine_smooth_factor=spine_smooth_factor
-        self.cut_separation=cut_separation
         self.filspine=filspine
         self.imgscale = header["CDELT2"] * (np.pi / 180.0) * distance
 
-
     
-    def make_fil_spine(self,header,beamwidth=None,verbose=False):
+    def make_fil_spine(self,beamwidth=None,verbose=False):
 
         """
         Create filament spine using the FilFinder package 'shortest path' option
     
         Parameters
-        ------
-        header: FITS header
-            The header corresponding to the image array. 
-        
         beamwidth: float
             A float in units of arcseconds indicating the beamwidth of the image array     
         
@@ -99,10 +93,7 @@ class radfil(object):
     
         #Create a filament spine with the FilFinder package, using your image array and mask array 
         
-        if beamwidth is None:
-            raise ValueError("Beamwidth must be provided to create filament spine")
-            
-        if type(beamwidth)!=np.float:
+        if isinstance(beamwidth,float)==False:
             raise TypeError("Beamwidth must be provided to create filament spine")
             
         fils=fil_finder_2D(self.image,self.header,beamwidth=beamwidth*u.arcsec,distance=self.distance*u.pc,mask=self.mask)
@@ -122,7 +113,7 @@ class radfil(object):
         
         return self
         
-    def build_profile(self, cutdist=3.0,plot_cuts=True,plot_samples=False):
+    def build_profile(self,cutdist=3.0,plot_cuts=True,plot_max=True,plot_samples=False,pts_mask=None,samp_int=3):
     
         """
         Build the filament profile using the inputted or recently created filament spine 
@@ -131,14 +122,28 @@ class radfil(object):
         ------
         self: An instance of the radfil_class
         
+        cut_dist: float (default=3.0)
+            A float indicating how far out from the spine you would like to sample the filaments
+        
         plot_cuts: boolean (default=True)
             A boolean indicating whether you want to plot the local width lines across the spine
+            
+        plot_max: boolean (default=True)
+            A boolean indicating whether you want to plot the pixel of maximum column density across 
+            each local width line 
         
         plot_samples: boolean (default=False)
             A boolean indicating whether you want to plot the points at which the profiles are sampled 
+            
+        pts_mask: numpy.ndarray
+            A 2D array masking out any regions from image array you don't want to sample; must be of boolean
+            type and the same shape as the image array 
         
-        show_plots: boolean (default=True)
-            A boolean indicating whether you want to display the plots    
+        samp_int: integer (default=3)
+            An integer indicating how frequently you'd like to make sample cuts across the filament
+            
+        smoothing_int: integer (default=10)
+            An integer indicating how many pixels you'd like to smooth over when parameterizing the smoothed spine. 
         
         """
     
@@ -157,7 +162,6 @@ class radfil(object):
         z = t
 
         #set the spline parameters
-        s=10 # smoothness parameter
         k=5 # spline order
         nest=-1 # estimate of number of knots needed (-1 = maximal)
 
@@ -169,19 +173,25 @@ class radfil(object):
         xprime,yprime,zprime = splev(u,tckp,der=1)
         
         #build plot
-        fig=plt.figure(figsize=(8,8))
+        fig=plt.figure(figsize=(10,10))
         ax=plt.gca()
         plt.imshow(self.mask,origin='lower',zorder=1,cmap='binary_r',interpolation='nearest',extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
         plt.ylim(0,self.image.shape[0])
         plt.xlim(0,self.image.shape[1])
-        #plt.plot(xx,yy,'b',label='data',lw=2,alpha=0.5)
         plt.plot(xfit,yfit,'r',label='fit',lw=2,alpha=0.5)
+        
+        
+        #If points_mask!=None, apply mask to smoothed spine, in case you don't want to sample entire filament
+        if pts_mask!=None:
+            pts_mask=np.where(pts_mask[yfit[1:-1:samp_int].astype(int),xfit[1:-1:samp_int].astype(int)]==1)
+        else:
+            pts_mask=np.ones((yfit[1:-1:samp_int].shape)).astype(bool)
 
-        self.xfit=xfit[1:-1:3]
-        self.yfit=yfit[1:-1:3]
-        self.points=xfit[1:-1:3]
-        self.fprime=yprime[1:-1:3]/xprime[1:-1:3]
-        self.m=-1.0/(yprime[1:-1:3]/xprime[1:-1:3])
+        self.xfit=xfit[1:-1:samp_int][pts_mask]
+        self.yfit=yfit[1:-1:samp_int][pts_mask]
+        self.points=xfit[1:-1:samp_int][pts_mask]
+        self.fprime=yprime[1:-1:samp_int][pts_mask]/xprime[1:-1:samp_int][pts_mask]
+        self.m=-1.0/(yprime[1:-1:samp_int][pts_mask]/xprime[1:-1:samp_int][pts_mask])
               
         delta=1.0
         deltax=[]
@@ -207,9 +217,9 @@ class radfil(object):
         self.maxcolx=maxcolx
         self.maxcoly=maxcoly
         
-        delta=np.clip((cutdist+1)/self.imgscale,(np.max(distpc)+1)/self.imgscale,np.inf)
         deltamax=[]
         for i in range(0,self.points.shape[0]):
+            delta=np.clip((cutdist)/self.imgscale,distpc[i]/self.imgscale,np.inf)
             arr1=np.array([[1,1],[1,-self.m[i]**2]])
             arr2=np.array([delta**2,0])
             solved = np.linalg.solve(arr1, arr2)
@@ -219,9 +229,9 @@ class radfil(object):
             
         self.deltamax=deltamax
         
-        xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=3.0,plot_max=True,plot_samples=False)
+        xtot,ytot=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=cutdist,plot_max=plot_max,plot_samples=plot_samples)
         
-        masterx,mastery,std=profile_tools.make_master_prof(xtot,ytot)
+        masterx,mastery,std=profile_tools.make_master_prof(xtot,ytot,cutdist=cutdist)
         mastery=mastery/10**22
         mastery=mastery.astype(float)
         
@@ -236,7 +246,7 @@ class radfil(object):
         
         return self
         
-    def fit_profile(self,model="Gaussian",fitdist=None,params=None,fit_bg=False,filname="Filament Profile Fitting"):
+    def fit_profile(self,model="Gaussian",fitdist=None,params=None,fit_bg=True,filname="Filament Profile Fitting",save_path=None):
     
         """
         Fit a model to the filament's master profile 
@@ -247,7 +257,7 @@ class radfil(object):
         
         model: str or function
             If you'd like to fit the built-in models, choose from either "Plummer" or "Gaussian"
-            If you'd like to fit your own model, input your function
+            If you'd like to fit your own model, input your own function
             
         fitdist: the radial distance you'd like to fit to (must be <= cutdist); default=cutdist
             
@@ -259,6 +269,10 @@ class radfil(object):
             
         filname= str,optional
             If you would like to title your plot with the name of the filament
+            
+        save_path=str, optional (default: None)
+            A string indicating the path and the filename you'd like to save the fits to; if no path is inputted,
+            the program will not save the file 
         
         """
         
@@ -289,7 +303,7 @@ class radfil(object):
             mod=Model(plummer_bg)
             params = Parameters()
             params.add('N_0', value=np.max(self.mastery[include])-np.min(self.mastery[include]))
-            params.add('R_flat', value=np.median(self.distpc)/2.0)
+            params.add('R_flat', value=np.median(self.distpc)/2.0,min=0)
             params.add('p', value=2.0)
             params.add('bg', value=np.min(self.mastery[include]))
             
@@ -297,22 +311,21 @@ class radfil(object):
             mod=Model(gaussian)
             params=Parameters()
             params.add('amp',value=np.max(self.mastery[include]))
-            params.add('width',value=np.median(self.distpc))
+            params.add('wid',value=np.median(self.distpc),min=0)
             
         if model=="Gaussian" and fit_bg==True:
             mod=Model(gaussian_bg)
             params=Parameters()
             params.add('amp',value=np.max(self.mastery[include])-np.min(self.mastery[include]))
-            params.add('width',value=np.median(self.distpc))
-            params.add('bg',value=np.min(self.mastery[include]))
-            
+            params.add('wid',value=np.median(self.distpc),min=0)
+            params.add('bg',value=np.min(self.mastery[include]),min=np.min(self.mastery[include]))
             
         result = mod.fit(self.mastery[include],r=self.masterx[include],params=params)
     
         fig, ax = plt.subplots(nrows=1, ncols=2,figsize=(20,5))
         plt.suptitle("{}".format(filname),fontsize=30)
                 
-        ax[0].scatter(self.masterx, self.mastery, c='b',label="Data",edgecolor='None')
+        ax[0].scatter(self.masterx, self.mastery, c='b',label="Master Profile",edgecolor='None')
         ax[0].plot(self.masterx[include], result.best_fit, 'y-',label="Model Fit",lw=2)
         ax[0].fill_between(self.masterx, self.mastery-self.std, self.mastery+self.std,color='gray',alpha=0.25)
         ax[0].set_xlim(-self.cutdist,self.cutdist)
@@ -320,6 +333,7 @@ class radfil(object):
         ax[0].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
         ax[0].set_xlabel("Radial distance (pc)",fontsize=20)
         ax[0].set_ylabel(r"$\rm H_2 \; Column \; Density \;(10^{22} \; cm^{-2})$",fontsize=20)
+        ax[0].legend()
         
         numparams=len(result.best_values.items())
         textpos=np.linspace(0.95-0.05*numparams,0.95,numparams)
@@ -328,10 +342,21 @@ class radfil(object):
                         horizontalalignment='left',verticalalignment='top', fontsize=15, fontweight='bold',transform=ax[0].transAxes)
     
         ax[1].plot(self.masterx[include], result.residual, 'r-',label="Residuals",lw=2)
-        ax[1].set_xlim(-fitdist,fitdist)
+        ax[1].set_xlim(-self.cutdist,self.cutdist)
         ax[1].set_ylim(-0.25,0.25)
         ax[1].set_xlabel("Radial distance (pc)",fontsize=20)
-        ax[1].legend()        
+        ax[1].axvline(-fitdist,c='k',ls='dashed',alpha=0.3)
+        ax[1].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
+        ax[1].legend() 
+        
+        plt.show()       
+        
+        if save_path!=None:
+            plt.savefig(save_path)
+            
+        plt.close("all")
+        
+        self.fit_result=result
         
         return self
        

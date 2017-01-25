@@ -232,10 +232,9 @@ def max_intensity(radobj,leftx,rightx,lefty,righty,ax):
         fa=radobj.yfit[i]
         fprime=radobj.fprime[i]
         m=radobj.m[i]
-        deltax=radobj.deltax[i]
                 
         #Sample the line along the entire local width
-        findxbound=np.linspace(np.min([leftx[i],rightx[i]]),np.max([leftx[i],rightx[i]]),100)
+        findxbound=np.linspace(np.min([leftx[i],rightx[i]]),np.max([leftx[i],rightx[i]]),10000)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent line
         
         #Determine unique pixel values along the local width
@@ -310,10 +309,9 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax=None,cutdist=3.0,plot_max=True,plo
         fa=radobj.yfit[i]
         fprime=radobj.fprime[i]
         m=radobj.m[i]
-        deltax=radobj.deltax[i]
         deltamax=radobj.deltamax[i]
                 
-        findxbound=np.linspace(a-deltamax,a+deltamax,1000)
+        findxbound=np.linspace(a-deltamax,a+deltamax,1000000)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
 
         unique,indices,inverse,counts=np.unique(indexedarr[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
@@ -389,7 +387,7 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
         1D array containing the standard deviation of the column density in each bin
     """
     
-    fig=plt.figure(figsize=(8,8))
+    fig=plt.figure(figsize=(5,5))
     
     #Interpolate linearly between sample points
     xinterp=[]
@@ -410,7 +408,7 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
     xinterp=np.hstack(xinterp)
     yinterp=np.hstack(yinterp)
     
-    bins=np.linspace(-cutdist,cutdist,int(cutdist*2/0.05))
+    bins=np.linspace(-cutdist,cutdist,int(cutdist*2/0.01))
     binorder=np.argsort(xinterp)
     xinterp=xinterp[binorder]
     yinterp=yinterp[binorder]
@@ -433,7 +431,8 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
     mastery=mastery[mask][1:-1]
     std=std[mask][1:-1]
     
-    plt.plot(masterx,mastery)
+    plt.plot(masterx,mastery, label="Median Profile",c='red')
+    plt.legend()
     
     return(masterx,mastery,std)
     
