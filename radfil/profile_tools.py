@@ -59,7 +59,7 @@ def curveorder(x,y):
     return(xx,yy)
     
     
-def maskbounds(radobj,ax,plot_width=True):
+def maskbounds(radobj,ax,plot_cuts=True):
 
     """
     Determine where the perpendicular cuts touch the mask on either side of the spine. These define
@@ -98,7 +98,7 @@ def maskbounds(radobj,ax,plot_width=True):
     ax: matplotlib.axes._subplots.AxesSubplot
         The axes for the current figure
         
-    plot_width: boolean
+    plot_cuts: boolean
         Do you want to plot each of the local width lines?
        
     Returns:
@@ -131,7 +131,7 @@ def maskbounds(radobj,ax,plot_width=True):
                     
         for line in linerange:
         
-            findxbound=np.linspace(a-line*deltax,a+line*deltax,1000)
+            findxbound=np.linspace(a-line*deltax,a+line*deltax,10000)
             findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
             
             if (np.min(findxbound)<0) or (np.max(findxbound)>radobj.image.shape[1]-1) or (np.min(findybound)<0) or (np.max(findybound)>radobj.image.shape[0]-1):
@@ -160,7 +160,7 @@ def maskbounds(radobj,ax,plot_width=True):
                 dist = math.hypot(fin_x[0] - fin_x[-1], fin_tanperp[0] - fin_tanperp[-1])
                 distpc.append(dist*radobj.imgscale)
                 
-                if plot_width==True:
+                if plot_cuts==True:
                     ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=1.0,zorder=2)  
                                            
                 break
@@ -183,7 +183,7 @@ def maskbounds(radobj,ax,plot_width=True):
                 dist = math.hypot(fin_x[0] - fin_x[-1], fin_tanperp[0] - fin_tanperp[-1])
                 distpc.append(dist*radobj.imgscale)
                     
-                if plot_width==True:
+                if plot_cuts==True:
                     ax.plot(fin_x,fin_tanperp,ls='solid',c='r',alpha=1.0,zorder=2)   
                                         
                 break 
@@ -360,7 +360,7 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax=None,cutdist=3.0,plot_max=True,plo
             ax.scatter(findxbound[extract],findybound[extract],c='green',edgecolor="None",zorder=4,s=20)
         if plot_max==True:
             ax.scatter(centerx,centery,c='blue',edgecolor="None",zorder=4,s=20,marker='o',alpha=0.5)
-
+            
     return np.array(xtot),np.array(ytot)
     
     
@@ -375,6 +375,9 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
        
     ytot: numpy.ndarray
         2D array containing the column densities corresponding to the radial distances stored in xaxis for all perpendicular cuts
+        
+    cutdist: float
+        A float indicating how far out you'd like to same the profile
         
     Returns: 
     masterx: numpy.ndarray
@@ -433,7 +436,7 @@ def make_master_prof(xtot,ytot,cutdist=3.0):
     
     plt.plot(masterx,mastery, label="Median Profile",c='red')
     plt.legend()
-    
+        
     return(masterx,mastery,std)
     
 

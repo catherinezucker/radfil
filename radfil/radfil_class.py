@@ -23,6 +23,14 @@ def gaussian(r, amp, wid):
             
 def gaussian_bg(r, amp, wid, bg):
     return (amp) * np.exp(-1 * np.power(r, 2) / (2 * np.power(wid, 2))) + bg
+    
+#taken from Eric Koch's filfinder package; linked here: 
+#https://github.com/e-koch/FilFinder/blob/7bca14d597f0d0911628384ccf48eb874a7f8380/fil_finder/utilities.py
+def padwithzeros(vector, pad_width, iaxis, kwargs):
+    vector[:pad_width[0]] = 0
+    if pad_width[1] > 0:
+        vector[-pad_width[1]:] = 0
+    return vector
 
 
 class radfil(object):
@@ -45,21 +53,17 @@ class radfil(object):
     distance : float or int
         Distance to the filament; must be entered in pc
         
-    spine_smooth_factor: integer, optional (default=10)
-        The amount of smoothing to be applied to the skeleton spine. This is
-        inputted into scipy's splprep function to find the smoothed,
-        B-spline representation of the filament spine
-        
-    cut_separation: float, optional (default=0.5 pc)
-        The physical distance between cuts along the filament spine, in pc
-        
     filspine: numpy.ndarray, optional
         A 2D array defining the longest path through the filament mask; must
         be of boolean type and the same shape as the img array. Can also create
         your own with the FilFinder package using the "make_fil_spine" method. 
+        
+    padsize: int, optional
+        In cases in which the filament is too close to the border of the image,
+        might need to pad in order for RadFil to successfully run
     """
         
-    def __init__(self, image, mask, header, distance, filspine=None):    
+    def __init__(self, image, mask, header, distance, filspine=None,padsize=None):    
                  
         if isinstance(image,np.ndarray)==False or isinstance(mask,np.ndarray)==False :
             raise TypeError("Image and/or mask array is the wrong type; need type np.ndarray")
@@ -76,6 +80,13 @@ class radfil(object):
         self.distance=distance
         self.filspine=filspine
         self.imgscale = header["CDELT2"] * (np.pi / 180.0) * distance
+        self.padsize=padsize
+        
+        if padsize!=None and isinstance(padsize,int)==True:
+            self.image=np.pad(self.image,padsize,padwithzeros)
+            self.mask=np.pad(self.mask,padsize,padwithzeros)
+            if self.filspine!=None:
+                self.filspine=np.pad(self.filspine,padsize,padwithzeros)
 
     
     def make_fil_spine(self,beamwidth=None,verbose=False):
@@ -141,12 +152,12 @@ class radfil(object):
         
         samp_int: integer (default=3)
             An integer indicating how frequently you'd like to make sample cuts across the filament
-            
-        smoothing_int: integer (default=10)
-            An integer indicating how many pixels you'd like to smooth over when parameterizing the smoothed spine. 
         
         """
-    
+        
+        if self.padsize!=None and pts_mask!=None:
+            pts_mask=np.pad(pts_mask,self.padsize,padwithzeros)
+
         #extract x and y coordinates of filament spine
         pixcrd=np.where(self.filspine==1)
         x=pixcrd[1]
@@ -179,8 +190,7 @@ class radfil(object):
         plt.ylim(0,self.image.shape[0])
         plt.xlim(0,self.image.shape[1])
         plt.plot(xfit,yfit,'r',label='fit',lw=2,alpha=0.5)
-        
-        
+                    
         #If points_mask!=None, apply mask to smoothed spine, in case you don't want to sample entire filament
         if pts_mask!=None:
             pts_mask=np.where(pts_mask[yfit[1:-1:samp_int].astype(int),xfit[1:-1:samp_int].astype(int)]==1)
@@ -243,6 +253,12 @@ class radfil(object):
         self.std=std
         
         self.cutdist=cutdist
+        
+        #return image, mask, and spine to original image dimensions without padding
+        if self.padsize!=None:
+            self.image=self.image[self.padsize:self.image.shape[0]-self.padsize,self.padsize:self.image.shape[1]-self.padsize]
+            self.mask=self.mask[self.padsize:self.mask.shape[0]-self.padsize,self.padsize:self.mask.shape[1]-self.padsize]
+            self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
         
         return self
         
