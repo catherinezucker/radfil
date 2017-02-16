@@ -492,8 +492,11 @@ class radfil(object):
         ax[axnum+1].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum+1].legend(loc='best') 
         
+        plt.show()
+        
         if save_path!=None:
             plt.savefig(save_path)
+            
                     
         self.fit_result=result
         
