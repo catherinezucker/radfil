@@ -339,7 +339,7 @@ class radfil(object):
 
         return self
         
-    def fit_profile(self,model="Gaussian",fitdist=None,subtract_bg=False, bgtype="sloping",bgbounds=None,f_scale=0.5,params=None,filname="Filament Profile Fitting",save_path=None,plot_bg_fit=True):
+    def fit_profile(self,model="Gaussian",fitdist=None,subtract_bg=False, bgtype="sloping",bgbounds=None,f_scale=0.5,params=None,filname="Filament Profile Fitting",save_path=None,plot_bg_fit=True,verbose=False):
     
         """
         Fit a model to the filament's master profile 
@@ -374,12 +374,18 @@ class radfil(object):
             If subtract_bg is true, would you like to subtract a flat background (m=0) or a sloping background (m!=0)?
             Please enter either "flat" or "sloping" as a string
             
-        filname= str,optional
+        filname: str,optional
             If you would like to title your plot with the name of the filament
             
-        save_path=str, optional (default: None)
+        save_path: str, optional (default: None)
             A string indicating the path and the filename you'd like to save the fits to; if no path is inputted,
             the program will not save the file 
+            
+        plot_bg_fit: boolean,optional (default=True)
+            Would you like to display a plot showing the fit to the background?
+            
+        verbose: boolean,optional (default=False)
+            Would you like to display the plots?
         
         Attributes
         ------
@@ -491,13 +497,13 @@ class radfil(object):
         ax[axnum+1].axvline(-fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum+1].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum+1].legend(loc='best') 
-        
-        plt.show()
-        
+                
         if save_path!=None:
             plt.savefig(save_path)
             
-                    
+        if verbose==True:
+            plt.show()
+              
         self.fit_result=result
         
         plt.close('all')
