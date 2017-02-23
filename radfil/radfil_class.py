@@ -404,80 +404,86 @@ class radfil(object):
             self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
 
         return self
-
-    def fit_profile(self,model="Gaussian",fitdist=None,subtract_bg=False, bgtype="sloping",bgbounds=None,f_scale=0.5,params=None,filname="Filament Profile Fitting",save_path=None,plot_bg_fit=True):
-
+        
+    def fit_profile(self,model="Gaussian",fitdist=None,subtract_bg=False, bgtype="sloping",bgbounds=None,f_scale=0.5,params=None,filname="Filament Profile Fitting",save_path=None,plot_bg_fit=True,verbose=False):
+    
         """
-        Fit a model to the filament's master profile
-
+        Fit a model to the filament's master profile 
+    
         Parameters
         ------
         self: An instance of the radfil_class
-
+        
         model: str or function
             If you'd like to fit the built-in models, choose from either "Plummer" or "Gaussian"
             If you'd like to fit your own model, input your own function
-
+            
         fitdist: int or float (default=cutdist)
-            The radial distance out to which you'd like to fit your profile (must be <= cutdist);
-
+            The radial distance out to which you'd like to fit your profile (must be <= cutdist); 
+            
         params: an lmfit.Parameters object, optional
             If you're using your own model, will have to input an lmfit.Parameters instance
-
+        
         subtract_bg: boolean, optional (default=True)
             Would you like to subtract a background before fitting the profile?
-
-        bgbounds: list, optional
-            The lower and upper bounds on your background fitting radius. For instance, if you want to fit a background
+            
+        bgbounds: list, optional 
+            The lower and upper bounds on your background fitting radius. For instance, if you want to fit a background 
             between a radial distance of 3pc and 4 pc, bgbounds=[3,4]
-
+            
         f_scale: int or float, optional (default=0.5)
-            A parameter used in the robust least-squares fitting of the background, with a 'soft_l1' loss function.
+            A parameter used in the robust least-squares fitting of the background, with a 'soft_l1' loss function. 
             It's defined as the "value of soft margin between inlier and outlier residuals"
             See https://docs.scipy.org/doc/scipy-0.17.0/reference/generated/scipy.optimize.least_squares.html for more information
-
+            
         bg_type: str, optional
             If subtract_bg is true, would you like to subtract a flat background (m=0) or a sloping background (m!=0)?
             Please enter either "flat" or "sloping" as a string
-
-        filname= str,optional
+            
+        filname: str,optional
             If you would like to title your plot with the name of the filament
-
-        save_path=str, optional (default: None)
+            
+        save_path: str, optional (default: None)
             A string indicating the path and the filename you'd like to save the fits to; if no path is inputted,
-            the program will not save the file
-
+            the program will not save the file 
+            
+        plot_bg_fit: boolean,optional (default=True)
+            Would you like to display a plot showing the fit to the background?
+            
+        verbose: boolean,optional (default=False)
+            Would you like to display the plots?
+        
         Attributes
         ------
-
+        
         fit_result: lmfit.model.ModelResult
             The result of the least squares fitting of the model
             see https://lmfit.github.io/lmfit-py/model.html#modelresult-attributes for options
-
+            
         bgline: scipy.optimize.OptimizeResult
             See https://docs.scipy.org/doc/scipy-0.17.0/reference/generated/scipy.optimize.OptimizeResult.html#scipy.optimize.OptimizeResult
             for more info on attributes. Can access the m and b values of the line by typing bgline['x'] which will return an
             array with the first value=m and the second value=b
-
-
+        
+        
         """
-
+        
         if fitdist==None:
             fitdist=self.cutdist
-
-        if isinstance(model, types.FunctionType)==False and model!="Gaussian" and model!="Plummer":
+                
+        if isinstance(model, types.FunctionType)==False and model!="Gaussian" and model!="Plummer":            
             raise ValueError("Please enter a valid model")
-
+            
         include=np.where(np.abs(self.masterx)<fitdist)
 
-
+          
         #User-inputted model
         if isinstance(model, types.FunctionType)==True:
             if type(params)!=lmfit.parameter.Parameters:
-                raise ValueError("Please enter a valid parameter object")
+                raise ValueError("Please enter a valid parameter object")    
             mod=Model(model)
-            params=params
-
+            params=params  
+            
         #Plummer model
         if model=="Plummer":
             mod=Model(plummer)
@@ -485,49 +491,49 @@ class radfil(object):
             params.add('N_0', value=np.max(self.mastery[include]),min=0.0)
             params.add('R_flat', value=np.median(self.distpc)/2.0,min=0.0)
             params.add('p', value=2.0,min=0.0)
-
+            
         #Gaussian model
         if model=="Gaussian":
             mod=Model(gaussian)
             params=Parameters()
             params.add('amp',value=np.max(self.mastery[include]),min=0)
             params.add('wid',value=np.median(self.distpc)/3.0,min=0)
-
+            
         #Do background subtraction
         if subtract_bg==True:
-
+                
             def bgfunc(bgparams, x, y):
                 return bgparams[0]*x+bgparams[1]-y
-
+            
             bgmask=(np.abs(self.masterx)>bgbounds[0]) & (np.abs(self.masterx)<bgbounds[1])
             bgline = least_squares(bgfunc, np.array([0,np.median(self.mastery[bgmask])]),loss='soft_l1',f_scale=f_scale,args=(self.masterx[bgmask],self.mastery[bgmask]))
             self.bgline=bgline
             bgsubtract=self.masterx*bgline['x'][0]+bgline['x'][1]
-
+            
         else:
             bgsubtract=np.zeros((self.masterx.shape))
-
+            
         if plot_bg_fit==True:
             fig, ax = plt.subplots(nrows=3,ncols=1,figsize=(10,12))
-            plt.suptitle("{}".format(filname),fontsize=20)
+            plt.suptitle("{}".format(filname),fontsize=20) 
             ax[0].scatter(self.masterx, self.mastery, c='b',label="Original Profile",edgecolor='None',s=10,alpha=0.75)
             ax[0].plot(np.linspace(-self.cutdist,+self.cutdist,100),np.linspace(-self.cutdist,+self.cutdist,100)*bgline['x'][0]+bgline['x'][1],'y-',label="Background Fit",lw=4)
             ax[0].set_xlim(-self.cutdist,self.cutdist)
             ax[0].set_xlabel("Radial distance (pc)",fontsize=15)
             ax[0].set_ylabel(r"$\rm H_2 \; Column \; Density \;(10^{22} \; cm^{-2})$",fontsize=15)
-            ax[0].legend(loc='best')
-
-            ax[0].text(0.03, 0.95,"{}={:.3f}".format('m',bgline['x'][0]),
+            ax[0].legend(loc='best')  
+            
+            ax[0].text(0.03, 0.95,"{}={:.3f}".format('m',bgline['x'][0]), 
                     horizontalalignment='left',verticalalignment='top', fontsize=12, fontweight='bold',transform=ax[0].transAxes)
-            ax[0].text(0.03, 0.85,"{}={:.3f}".format('b',bgline['x'][1]),
+            ax[0].text(0.03, 0.85,"{}={:.3f}".format('b',bgline['x'][1]), 
                     horizontalalignment='left',verticalalignment='top', fontsize=12, fontweight='bold',transform=ax[0].transAxes)
-
-            axnum=1
+                    
+            axnum=1     
         else:
             fig, ax = plt.subplots(nrows=1,ncols=2,figsize=(10,10))
-            plt.suptitle("{}".format(filname),fontsize=20)
+            plt.suptitle("{}".format(filname),fontsize=20) 
             axnum=0
-
+        
         result = mod.fit(self.mastery[include]-bgsubtract[include],r=self.masterx[include],params=params)
 
         ax[axnum].scatter(self.masterx, self.mastery-bgsubtract, c='b',label="Master Profile",edgecolor='None',s=10,alpha=0.75)
@@ -537,35 +543,52 @@ class radfil(object):
         ax[axnum].axvline(-fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum].set_xlabel("Radial distance (pc)",fontsize=15)
-        ax[axnum].set_ylabel(r"$\rm H_2 \; Column \; Density \;(10^{22} \; cm^{-2})$",fontsize=15)
+        ax[axnum].set_ylabel(r"$\rm H_2 \; Column \; Density \;(10^{22} \; cm^{-2})$",fontsize=15)        
         ax[axnum].legend(loc='best')
-
+        
         numparams=len(result.best_values.items())
         textpos=np.linspace(0.95-0.05*numparams,0.95,numparams)
         for i in range(0,numparams):
-            ax[axnum].text(0.03, textpos[i],"{}={:.2f}".format(result.best_values.items()[i][0],result.best_values.items()[i][1]),
+            ax[axnum].text(0.03, textpos[i],"{}={:.2f}".format(result.best_values.items()[i][0],result.best_values.items()[i][1]), 
                     horizontalalignment='left',verticalalignment='top', fontsize=12, fontweight='bold',transform=ax[axnum].transAxes)
-
+                    
         if self.nobins==True:
             ax[axnum+1].scatter(self.masterx[include],result.residual,c='r',label="Residuals",lw=2,edgecolor="None")
         else:
             ax[axnum+1].plot(self.masterx[include],result.residual,'r-',label="Residuals",lw=4)
-
+            
         ax[axnum+1].set_xlim(-self.cutdist,self.cutdist)
         ax[axnum+1].set_ylim(np.min(result.residual)-0.25,np.max(result.residual)+0.25)
         ax[axnum+1].set_xlabel("Radial distance (pc)",fontsize=15)
         ax[axnum+1].axvline(-fitdist,c='k',ls='dashed',alpha=0.3)
         ax[axnum+1].axvline(+fitdist,c='k',ls='dashed',alpha=0.3)
-        ax[axnum+1].legend(loc='best')
-
-        plt.show()
-
+        ax[axnum+1].legend(loc='best') 
+                
         if save_path!=None:
             plt.savefig(save_path)
-
-
+            
+        if verbose==True:
+            plt.show()
+              
         self.fit_result=result
-
+        
         plt.close('all')
-
+        
         return self
+       
+        
+
+        
+
+        
+    
+
+        
+        
+        
+
+    
+    
+
+    
+    
