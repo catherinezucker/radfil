@@ -1,4 +1,5 @@
 import numpy as np
+from collections import defaultdict
 import types
 from scipy.interpolate import splprep
 from scipy.interpolate import splev
@@ -85,7 +86,7 @@ class radfil(object):
 
         # Read mask
         if (isinstance(mask, np.ndarray)) and (mask.ndim == 2):
-            self.mask = mask
+            self.mask = (mask & np.isfinite(self.image))
         else:
             raise TypeError("The input `mask` has to be a 2d numpy array.")
 
@@ -202,7 +203,7 @@ class radfil(object):
 
         return self
 
-    def build_profile(self,cutdist=3.0,pts_mask=None,samp_int=3,numbins=120,save_mask=None,save_cuts=None,nobins=False,norm_constant=1e+22):
+    def build_profile(self,cutdist=3.0,pts_mask=None,samp_int=3,bins=120,save_mask=None,nobins=True,norm_constant=1e+22, shift = True, wrap = False):
 
         """
         Build the filament profile using the inputted or recently created filament spine
@@ -226,24 +227,27 @@ class radfil(object):
             Saves a figure displaying image mask, the filament spine, the "local width" lines
             and the pixels with the max column density along each local width line
 
-        save_cuts: str,optional
-            Saves a figure containing the profiles for all the cuts along the filament,
-            along with the master profile calculated by taking the average, median profile.
-            Will only save if nobins=False
-
         nobins: boolean (default=False)
             A boolean indicating whether you'd like to bin the profiles.
 
             A "True" value indicates that no binning will be performed.
 
-        numbins: int, optional (default=120)
-            The number of bins you'd like to divide the whole profile (-cutdist to +cutdist) into, assuming nobins=False.
+        bins: int or 1D numpy.ndarray, optional (default=120)
+            The number of bins or the actual bin edges you'd like to divide the whole profile (-cutdist to +cutdist) into, assuming nobins=False.
             If false, all of the individual profiles are binned by distance from r=0 pc and then the median column density
             in each of these bins is taken to determine the master profile
 
         norm_constant: float, optional (default=1e+22)
             Would you like to normalize your column densites (or flux) values by some normalization constant? If so
             enter it as a float or int
+
+        shift: boolean (default = True)
+            Indicates whether to shift the profile to center at the peak value.
+
+        wrap: boolean (default = False)
+            Indicates whether to wrap around the central pixel, so that the final profile
+            will be a "half profile" with the peak near/at the center (depending on
+            whether it's shifted).
 
         Attributes
         ----------
@@ -317,7 +321,7 @@ class radfil(object):
         tckp, up, = splprep([x,y], k = k, nest = -1)
         ## evaluate spline
         xfit, yfit = splev(up, tckp)
-        xprime, yprime = splev(up, tckp,der=1)
+        xprime, yprime = splev(up, tckp, der=1)
         ## Notice that the result containt points on the spline that are not
         ## evenly sampled.  This might introduce biase when using a single
         ## number `samp_int`.
@@ -330,6 +334,7 @@ class radfil(object):
         ax.plot(xfit, yfit, 'r', label='fit', lw=2, alpha=0.25)
         ax.set_xlim(0, self.mask.shape[1])
         ax.set_ylim(0, self.mask.shape[0])
+        self.fig, self.ax = fig, ax
 
         # Only points within pts_mask AND the original mask are used.
         if (self.pts_mask is not None):
@@ -341,80 +346,80 @@ class radfil(object):
             pts_mask = (self.mask[np.round(yfit[1:-1:samp_int]).astype(int),
                                   np.round(xfit[1:-1:samp_int]).astype(int)])
 
-        self.xfit=xfit[1:-1:samp_int][pts_mask]
-        self.yfit=yfit[1:-1:samp_int][pts_mask]
-        self.points=xfit[1:-1:samp_int][pts_mask]
-        self.fprime=yprime[1:-1:samp_int][pts_mask]/xprime[1:-1:samp_int][pts_mask]
-        self.m=-1.0/(yprime[1:-1:samp_int][pts_mask]/xprime[1:-1:samp_int][pts_mask])
+        # Prepare for extracting the profiles
+        self.xfit = xfit[1:-1:samp_int][pts_mask]
+        self.yfit = yfit[1:-1:samp_int][pts_mask]
+        self.points = np.asarray(zip(self.xfit, self.yfit))
+        self.fprime = np.asarray(zip(xprime[1:-1:samp_int][pts_mask], yprime[1:-1:samp_int][pts_mask]))
 
-        delta=1.0
-        deltax=[]
-        for i in range(0,self.points.shape[0]):
-            arr1=np.array([[1,1],[1,-self.m[i]**2]])
-            arr2=np.array([delta**2,0])
-            solved = np.linalg.solve(arr1, arr2)
-            y=np.sqrt(solved[0])+self.yfit[i]
-            x=np.sqrt(solved[1])+self.xfit[i]
-            deltax.append(np.sqrt(np.abs(solved[1])))
 
-        self.deltax=np.array(deltax)
+        # Extract the profiles
+        directory_cuts = defaultdict(list)
+        for n in range(len(self.points)):
+            profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = shift, wrap = wrap)
+            directory_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value)
+            directory_cuts['profile'].append(profile[1])
 
-        leftx,rightx,lefty,righty,distpc = profile_tools.maskbounds(self,ax=ax)
+        self.directory_cuts = directory_cuts
 
-        self.distpc=distpc
-
-        if leftx.shape[0]!= self.points.shape[0]:
-            raise AssertionError("Missing point")
-
-        maxcolx,maxcoly=profile_tools.max_intensity(self,leftx,rightx,lefty,righty,ax=ax)
-
-        self.maxcolx=maxcolx
-        self.maxcoly=maxcoly
-
-        deltamax=[]
-        for i in range(0,self.points.shape[0]):
-            delta=np.clip((cutdist)/self.imgscale.to(u.pc).value,distpc[i]/self.imgscale.to(u.pc).value,np.inf)
-            arr1=np.array([[1,1],[1,-self.m[i]**2]])
-            arr2=np.array([delta**2,0])
-            solved = np.linalg.solve(arr1, arr2)
-            y=np.sqrt(solved[0])+self.maxcoly[i]
-            x=np.sqrt(solved[1])+self.maxcolx[i]
-            deltamax.append(np.sqrt(np.abs(solved[1])))
-
-        self.deltamax=deltamax
-
-        xtot,ytot,samplesx,samplesy=profile_tools.get_radial_prof(self,maxcolx,maxcoly,ax=ax,cutdist=cutdist)
-
-        self.xtot=xtot
-        self.ytot=ytot
+        # Stack the result and include only points inside `cutdist`.
+        xtot, ytot = np.concatenate(directory_cuts['distance']), np.concatenate(directory_cuts['profile'])
+        xtot, ytot = xtot[(xtot >= (-self.cutdist/self.imgscale).decompose().value)&\
+                          (xtot < (self.cutdist/self.imgscale).decompose().value)],\
+                     ytot[(xtot >= (-self.cutdist/self.imgscale).decompose().value)&\
+                          (xtot < (self.cutdist/self.imgscale).decompose().value)]
+        ## Store the values.
+        self.xtot = xtot
+        self.ytot = ytot
 
         if save_mask!=None and isinstance(save_mask,str)==True:
             plt.savefig(save_mask)
 
-        #Bin the profiles (if nobins=False) or stack the profiles (if nobins=True)
-        if nobins==False:
-            masterx,mastery,std=profile_tools.make_master_prof(xtot,ytot,cutdist=cutdist,numbins=numbins)
+        # Bin the profiles (if nobins=False) or stack the profiles (if nobins=True)
+        ## This step assumes linear binning.
+        if (not nobins):
+            ## If the input is the number of bins:
+            if isinstance(bins, numbers.Number) and (bins%1 == 0):
+                bins = int(round(bins))
+                minR, maxR = np.min(self.xtot), np.max(self.ytot)
+                bins = np.linspace(minR, maxR, bins+1)
+                masterx = bins[:-1]+.5*np.diff(bins)
+                mastery = np.asarray([np.median(self.ytot[((self.xtot >= (X-.5*np.diff(bins)[0]))&\
+                                               (self.xtot < (X+.5*np.diff(bins)[0])))]) for X in masterx])
+            ## If the input is the edges of bins:
+            elif isinstance(bins, np.ndarray) and (bins.ndim == 1):
+                bins = bins
+                masterx = bins[:-1]+.5*np.diff(bins) ## assumes linear binning.
+                mastery = np.asarray([np.median(self.ytot[((self.xtot >= (X-.5*np.diff(bins)[0]))&\
+                                               (self.xtot < (X+.5*np.diff(bins)[0])))]) for X in masterx])
+            ## If the input is wrong.
+            else:
+                raise TypeError("Bins must be an integer or an 1D numpy.array.")
+
+        ## No binning.
         else:
-            masterx=np.hstack((xtot))
-            mastery=np.hstack((ytot))
+            masterx = self.xtot
+            mastery = self.ytot
+            ##### Not sure what std does, yet.
+            '''
             std=np.empty((masterx.shape))*np.nan
             nonan=np.where(np.isfinite(mastery)==True)
             masterx=masterx[nonan]
             mastery=mastery[nonan]
             std=std[nonan]
+            '''
 
-        if save_cuts!=None and isinstance(save_cuts,str)==True:
-            plt.savefig(save_cuts)
 
-        mastery=mastery/norm_constant
-        mastery=mastery.astype(float)
+        # Normalize the profile for better fitting.
+        mastery = mastery/norm_constant
+        mastery = mastery.astype(float)
 
-        std=std/norm_constant
-        std=std.astype(float)
+        #std=std/norm_constant
+        #std=std.astype(float)
 
         self.masterx=masterx
         self.mastery=mastery
-        self.std=std
+        #self.std=std
 
         #return image, mask, and spine to original image dimensions without padding
         if self.padsize!=None and self.padsize!=0:
