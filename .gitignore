@@ -59,4 +59,8 @@ docs/_build/
 target/
 
 #Ipython Notebook
-.ipynb_checkpoints
+RadFil_dev.ipynb
+*.ipynb_checkpoints
+
+# code backup
+*.py.orig
