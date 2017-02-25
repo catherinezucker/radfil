@@ -159,17 +159,18 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     # Plot.
     peak_finder = [t for t in centers if (round(t[0]), round(t[1])) in final_idx]
     start, end = peak_finder[0], peak_finder[-1]
-    axis.plot([start[0]+.5, end[0]+.5], [start[1]+.5, end[1]+.5], 'r-', linewidth = 1.)
+    xpeak, ypeak = np.asarray(peak_finder)[image_line == np.max(image_line)][0]
+    axis.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth = 1.)
 
     # Shift.
     if shift:
-        xpeak, ypeak = np.asarray(peak_finder)[image_line == np.max(image_line)][0]
-        axis.plot(xpeak+.5, ypeak+.5, 'b.', markersize = 6.)
+        #xpeak, ypeak = np.asarray(peak_finder)[image_line == np.max(image_line)][0]
+        #axis.plot(xpeak, ypeak, 'b.', markersize = 6.)
         final_dist = np.asarray([np.sqrt((t[0]-xpeak)**2.+(t[1]-ypeak)**2.) for t in centers\
                   if (round(t[0]), round(t[1])) in final_idx])
 
     else:
-        final_dist = np.asarray([np.sqrt((t[0]-point[0])**2.+(t[1]-point[1])**2.) for t in centers\
+        final_dist = np.asarray([np.sqrt((t[0]-x0)**2.+(t[1]-y0)**2.) for t in centers\
                       if (round(t[0]), round(t[1])) in final_idx])
 
 
@@ -183,7 +184,7 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
 
 
 
-    return final_dist, image_line
+    return final_dist, image_line, (xpeak, ypeak)
 
 
 

@@ -326,15 +326,15 @@ class radfil(object):
         ## evenly sampled.  This might introduce biase when using a single
         ## number `samp_int`.
 
-
-        # Plot
+        ## Plot the results
         fig=plt.figure(figsize=(5,5))
         ax=plt.gca()
-        ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none', extent=[0,self.mask.shape[1],0,self.mask.shape[0]])
+        ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
         ax.plot(xfit, yfit, 'r', label='fit', lw=2, alpha=0.25)
-        ax.set_xlim(0, self.mask.shape[1])
-        ax.set_ylim(0, self.mask.shape[0])
+        ax.set_xlim(-.5, self.mask.shape[1]-.5)
+        ax.set_ylim(-.5, self.mask.shape[0]-.5)
         self.fig, self.ax = fig, ax
+
 
         # Only points within pts_mask AND the original mask are used.
         if (self.pts_mask is not None):
@@ -354,16 +354,23 @@ class radfil(object):
 
 
         # Extract the profiles
-        directory_cuts = defaultdict(list)
+        dictionary_cuts = defaultdict(list)
         for n in range(len(self.points)):
             profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = shift, wrap = wrap)
-            directory_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value)
-            directory_cuts['profile'].append(profile[1])
+            dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value)
+            dictionary_cuts['profile'].append(profile[1])
+            dictionary_cuts['plot'].append(profile[2])
 
-        self.directory_cuts = directory_cuts
+        # Return the complete set of cuts. Including those outside `cutdist`.
+        self.dictionary_cuts = dictionary_cuts
+        self.ax.plot(np.asarray(dictionary_cuts['plot'])[:, 0],
+                     np.asarray(dictionary_cuts['plot'])[:, 1],
+                     'b.', markersize = 6.)
+
+
 
         # Stack the result and include only points inside `cutdist`.
-        xtot, ytot = np.concatenate(directory_cuts['distance']), np.concatenate(directory_cuts['profile'])
+        xtot, ytot = np.concatenate(dictionary_cuts['distance']), np.concatenate(dictionary_cuts['profile'])
         xtot, ytot = xtot[(xtot >= (-self.cutdist/self.imgscale).decompose().value)&\
                           (xtot < (self.cutdist/self.imgscale).decompose().value)],\
                      ytot[(xtot >= (-self.cutdist/self.imgscale).decompose().value)&\
@@ -532,7 +539,8 @@ class radfil(object):
             bgmask=(np.abs(self.masterx)>bgbounds[0]) & (np.abs(self.masterx)<bgbounds[1])
             bgline = least_squares(bgfunc, np.array([0,np.median(self.mastery[bgmask])]),loss='soft_l1',f_scale=f_scale,args=(self.masterx[bgmask],self.mastery[bgmask]))
             self.bgline=bgline
-            bgsubtract=self.masterx*bgline['x'][0]+bgline['x'][1]
+            #bgsubtract=self.masterx*bgline['x'][0]+bgline['x'][1]
+            bgsubtract = bgfunc(self.masterx, *bgline['x'])
 
         else:
             bgsubtract=np.zeros((self.masterx.shape))
