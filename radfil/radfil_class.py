@@ -1,21 +1,21 @@
+import sys
+
 import numpy as np
+import numbers
+import math
 from collections import defaultdict
 import types
 from scipy.interpolate import splprep
 from scipy.interpolate import splev
 import matplotlib.pyplot as plt
-import sys
-from radfil import profile_tools
+
 import astropy.units as u
 import astropy.constants as c
 from astropy.modeling import models, fitting
 from astropy.io import fits
-import math
-from matplotlib.colors import LogNorm
-from scipy.optimize import least_squares
-import numbers
 from fil_finder import fil_finder_2D
 
+from radfil import profile_tools
 from plummer import Plummer1D
 
 
