@@ -436,6 +436,10 @@ class radfil(object):
         ------
 
         xbg, ybg: 1D numpy.ndarray (list-like)
+            Data used for background subtraction.
+
+        xfit, yfit: 1D numpy.ndarray (list-like)
+            Data used in fitting.
 
         bgfit: astropy.modeling.functional_models (1st-order) or float (0th-order)
             The background removal information.
