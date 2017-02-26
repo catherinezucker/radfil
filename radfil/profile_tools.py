@@ -184,7 +184,7 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
 
 
 
-    return final_dist, image_line, (xpeak, ypeak)
+    return final_dist, image_line, (xpeak, ypeak), (start, end)
 
 
 

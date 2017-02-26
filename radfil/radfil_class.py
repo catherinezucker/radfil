@@ -336,14 +336,15 @@ class radfil(object):
             profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
             dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value) ## in pc
             dictionary_cuts['profile'].append(profile[1])
-            dictionary_cuts['plot'].append(profile[2])
+            dictionary_cuts['plot_peaks'].append(profile[2])
+            dictionary_cuts['plot_cuts'].append(profile[3])
 
         # Return the complete set of cuts. Including those outside `cutdist`.
         self.dictionary_cuts = dictionary_cuts
         ## Plot the peak positions if shift
         if self.shift:
-            self.ax.plot(np.asarray(dictionary_cuts['plot'])[:, 0],
-                         np.asarray(dictionary_cuts['plot'])[:, 1],
+            self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
+                         np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
                          'b.', markersize = 6.)
 
 
@@ -386,16 +387,10 @@ class radfil(object):
 
 
 
-        # Normalize the profile for better fitting.
-        #mastery = mastery/norm_constant
-        #mastery = mastery.astype(float)
 
-        #std=std/norm_constant
-        #std=std.astype(float)
-
+        # Return the profile sent to `fit_profile`.
         self.masterx=masterx
         self.mastery=mastery
-        #self.std=std
 
         #return image, mask, and spine to original image dimensions without padding
         if self.padsize!=None and self.padsize!=0:
@@ -661,10 +656,10 @@ class radfil(object):
         return self
 
 
-    #def plotter(self):
-#        '''
-#        Return a `radfil.plot.RadFilPlotter` class.
-#        '''
-#
-#        from radfil import plot
-#        return plot.RadFilPlotter(self)
+    def plotter(self):
+        '''
+        Return a `radfil.plot.RadFilPlotter` class.
+        '''
+
+        from radfil import plot
+        return plot.RadFilPlotter(self)
