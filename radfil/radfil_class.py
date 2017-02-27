@@ -1,4 +1,5 @@
 import sys
+import warnings
 
 import numpy as np
 import numbers
@@ -14,6 +15,7 @@ import astropy.constants as c
 from astropy.modeling import models, fitting
 from astropy.io import fits
 from fil_finder import fil_finder_2D
+import shapely.geometry as geometry
 
 from radfil import profile_tools
 from plummer import Plummer1D
@@ -115,13 +117,13 @@ class radfil(object):
                 else:
                     if isinstance(imgscale, numbers.Number):
                         self.imgscale = float(imgscale) * u.pc
-                        raise Warning("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                        warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
                     else:
                         raise TypeError("Please specify a proper `imgscale` in parsec if the information is not in the header.")
 
         else:
             self.filspine = None
-            raise Warning("The input `filspine` has to be a 2D numpy array. Ignore for now.")
+            warnings.warn("The input `filspine` has to be a 2D numpy array. Ignore for now.")
 
 
 
@@ -173,7 +175,7 @@ class radfil(object):
             self.beamwidth = beamwidth * u.arcsec
         else:
             self.beamwidth = None
-            raise Warning("A beamwidth is needed if the header does not contain the beam information.")
+            warnings.warn("A beamwidth is needed if the header does not contain the beam information.")
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
@@ -196,7 +198,7 @@ class radfil(object):
 
         return self
 
-    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False):
+    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True):
 
         """
         Build the filament profile using the inputted or recently created filament spine
@@ -230,6 +232,15 @@ class radfil(object):
             will be a "half profile" with the peak near/at the center (depending on
             whether it's shifted).
 
+        cut: boolean (default = True)
+            Indicates whether to perform cuts when extracting the profile. Since
+            the original spine found by `fil_finder_2D` is not likely differentiable
+            everywhere, setting `cut = True` necessates a spline fit to smoothe
+            the spine. See related documentation above.
+
+            Setting `cut = False` will make `radfil` calculate a distance and a
+            height/value for every pixel inside the mask.
+
         Attributes
         ----------
 
@@ -259,7 +270,7 @@ class radfil(object):
         """
 
 
-        # Read shift and wrap
+        # Read shift, wrap, cut, and samp_int
         ## shift
         if isinstance(shift, bool):
             self.shift = shift
@@ -270,6 +281,17 @@ class radfil(object):
             self.wrap = wrap
         else:
             raise TypeError("wrap has to be a boolean value. See documentation.")
+        ## cut
+        if isinstance(cut, bool):
+            self.cutting = cut
+        else:
+            raise TypeError("cut has to be a boolean value. See documentation.")
+        ## samp_int
+        if isinstance(samp_int, int):
+            self.samp_int = samp_int
+        else:
+            self.samp_int = None
+            warnings.warn("samp_int has to be an integer; ignored for now. See documentation.")
 
         # Read the pts_mask and see if it needs padding
         if isinstance(pts_mask, np.ndarray) and (pts_mask.ndim == 2):
@@ -290,67 +312,113 @@ class radfil(object):
         x, y = profile_tools.curveorder(pixcrd[1], pixcrd[0])
         self.xbeforespline, self.ybeforespline = x, y
 
-        # Spline calculation:
-        ##set the spline parameters
-        k = 5 # spline order ## why 5 when scipy suggested 3?
-        nest = -1 # estimate of number of knots needed (-1 = maximal)
-        ## find the knot points
-        tckp, up, = splprep([x,y], k = k, nest = -1)
-        ## evaluate spline
-        xspline, yspline = splev(up, tckp)
-        xprime, yprime = splev(up, tckp, der=1)
-        ## Notice that the result containt points on the spline that are not
-        ## evenly sampled.  This might introduce biase when using a single
-        ## number `samp_int`.
+        # If cut
+        if self.cutting:
+            # Filter out wrong samp_int
+            if self.samp_int is None:
+                raise TypeError("samp_int has to be an integer, when cut is True.")
+            # Spline calculation:
+            ##set the spline parameters
+            k = 5 # spline order ## why 5 when scipy suggested 3?
+            nest = -1 # estimate of number of knots needed (-1 = maximal)
+            ## find the knot points
+            tckp, up, = splprep([x,y], k = k, nest = -1)
+            ## evaluate spline
+            xspline, yspline = splev(up, tckp)
+            xprime, yprime = splev(up, tckp, der=1)
+            ## Notice that the result containt points on the spline that are not
+            ## evenly sampled.  This might introduce biase when using a single
+            ## number `samp_int`.
 
-        ## Plot the results
-        fig=plt.figure(figsize=(5,5))
-        ax=plt.gca()
-        ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
-        ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.25)
-        ax.set_xlim(-.5, self.mask.shape[1]-.5)
-        ax.set_ylim(-.5, self.mask.shape[0]-.5)
-        self.fig, self.ax = fig, ax
+            ## Plot the results
+            fig=plt.figure(figsize=(5,5))
+            ax=plt.gca()
+            ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
+            ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.25)
+            ax.set_xlim(-.5, self.mask.shape[1]-.5)
+            ax.set_ylim(-.5, self.mask.shape[0]-.5)
+            self.fig, self.ax = fig, ax
 
 
-        # Only points within pts_mask AND the original mask are used.
-        if (self.pts_mask is not None):
-            pts_mask = ((self.pts_mask[np.round(yspline[1:-1:samp_int]).astype(int),
-                                       np.round(xspline[1:-1:samp_int]).astype(int)]) &\
-                        (self.mask[np.round(yspline[1:-1:samp_int]).astype(int),
-                                   np.round(xspline[1:-1:samp_int]).astype(int)]))
+            # Only points within pts_mask AND the original mask are used.
+            if (self.pts_mask is not None):
+                pts_mask = ((self.pts_mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
+                                           np.round(xspline[1:-1:self.samp_int]).astype(int)]) &\
+                            (self.mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
+                                       np.round(xspline[1:-1:self.samp_int]).astype(int)]))
+            else:
+                pts_mask = (self.mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
+                                      np.round(xspline[1:-1:self.samp_int]).astype(int)])
+
+            # Prepare for extracting the profiles
+            self.xspline = xspline[1:-1:self.samp_int][pts_mask]
+            self.yspline = yspline[1:-1:self.samp_int][pts_mask]
+            self.points = np.asarray(zip(self.xspline, self.yspline))
+            self.fprime = np.asarray(zip(xprime[1:-1:self.samp_int][pts_mask], yprime[1:-1:self.samp_int][pts_mask]))
+
+
+            # Extract the profiles
+            dictionary_cuts = defaultdict(list)
+            for n in range(len(self.points)):
+                profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
+                dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value) ## in pc
+                dictionary_cuts['profile'].append(profile[1])
+                dictionary_cuts['plot_peaks'].append(profile[2])
+                dictionary_cuts['plot_cuts'].append(profile[3])
+
+            # Return the complete set of cuts. Including those outside `cutdist`.
+            self.dictionary_cuts = dictionary_cuts
+            ## Plot the peak positions if shift
+            if self.shift:
+                self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
+                             np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
+                             'b.', markersize = 6.)
+        # if no cutting
         else:
-            pts_mask = (self.mask[np.round(yspline[1:-1:samp_int]).astype(int),
-                                  np.round(xspline[1:-1:samp_int]).astype(int)])
+            ## warnings.warn if samp_int exists.
+            if (self.samp_int is not None):
+                warnings.warn("samp_int is not used. cut is False.")
+            ## warnings.warn if shift and/or wrap is True.
+            if (self.shift or self.wrap):
+                warnings.warn("shift and/or wrap are not used. cut is False.")
+                self.shift, self.wrap = False, True
 
-        # Prepare for extracting the profiles
-        self.xspline = xspline[1:-1:samp_int][pts_mask]
-        self.yspline = yspline[1:-1:samp_int][pts_mask]
-        self.points = np.asarray(zip(self.xspline, self.yspline))
-        self.fprime = np.asarray(zip(xprime[1:-1:samp_int][pts_mask], yprime[1:-1:samp_int][pts_mask]))
+            # Only points within pts_mask AND the original mask are used.
+            if (self.pts_mask is not None):
+                pts_mask = ((self.pts_mask[np.round(self.ybeforespline).astype(int),
+                                           np.round(self.xbeforespline).astype(int)]) &\
+                            (self.mask[np.round(self.ybeforespline).astype(int),
+                                       np.round(self.xbeforespline).astype(int)]))
+            else:
+                pts_mask = (self.mask[np.round(self.ybeforespline).astype(int),
+                                      np.round(self.xbeforespline).astype(int)])
 
+            # Make the line object with Shapely
+            self.points = np.asarray(zip(self.xbeforespline[pts_mask], self.ybeforespline[pts_mask]))
+            line = geometry.LineString(self.points)
+            self.xspline, self.yspline, self.fprime = None, None, None
 
-        # Extract the profiles
-        dictionary_cuts = defaultdict(list)
-        for n in range(len(self.points)):
-            profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
-            dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value) ## in pc
-            dictionary_cuts['profile'].append(profile[1])
-            dictionary_cuts['plot_peaks'].append(profile[2])
-            dictionary_cuts['plot_cuts'].append(profile[3])
+            ## Plot the results
+            fig=plt.figure(figsize=(5,5))
+            ax=plt.gca()
+            ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
+            ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.25)
+            ax.set_xlim(-.5, self.mask.shape[1]-.5)
+            ax.set_ylim(-.5, self.mask.shape[0]-.5)
+            self.fig, self.ax = fig, ax
 
-        # Return the complete set of cuts. Including those outside `cutdist`.
-        self.dictionary_cuts = dictionary_cuts
-        ## Plot the peak positions if shift
-        if self.shift:
-            self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
-                         np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
-                         'b.', markersize = 6.)
+            # Extract the distances and the heights
+            dictionary_cuts = {}
+            dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pc).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+            dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+            dictionary_cuts['plot_peaks'] = None
+            dictionary_cuts['plot_cuts'] = None
+            self.dictionary_cuts = dictionary_cuts
 
 
 
         # Stack the result.
-        xall, yall = np.concatenate(dictionary_cuts['distance']), np.concatenate(dictionary_cuts['profile'])
+        xall, yall = np.concatenate(self.dictionary_cuts['distance']), np.concatenate(self.dictionary_cuts['profile'])
         #xall, yall = xall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
         #                   (xall < (self.cutdist/self.imgscale).decompose().value)],\
         #             yall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
@@ -473,7 +541,7 @@ class radfil(object):
         else:
             self.bgdist = None
             self.bgdistfrom = None
-            raise Warning("No background removal will be performed.")
+            warnings.warn("No background removal will be performed.")
 
 
 
