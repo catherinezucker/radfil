@@ -71,7 +71,7 @@ class radfil(object):
            The image scale in pc of each pixel
     """
 
-    def __init__(self, image, mask, header, distance, filspine=None, padsize=None, imgscale=None):
+    def __init__(self, image, mask, header = None, distance = None, filspine=None, padsize=None, imgscale=None):
 
         # Read image
         if (isinstance(image, np.ndarray)) and (image.ndim == 2):
@@ -89,14 +89,19 @@ class radfil(object):
         if (isinstance(header, fits.header.Header)):
             self.header = header
         else:
-            raise TypeError("The imput `header` has to be a fits header.")
+            self.header = None
+            self.distance = None
+            warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
 
         # Read distance
         ## `self.distance` is in pc.
         if isinstance(distance, numbers.Number):
             self.distance = float(distance) * u.pc
+        ## if distance is wrong or None, calculate in pixel units.
         else:
-            raise TypeError("The input `distance` has to be a float number or an integer.")
+            self.distance = None
+            self.header = None
+            warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
 
 
         # Read filspine/define filspine
@@ -107,19 +112,25 @@ class radfil(object):
             # the trouble to run `make_fil_spine`.
             if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)):
                 # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
-                if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
-                    # `imgscale` in u.pc
-                    ## The change to u.pc has not been cleaned up for the rest of the code, yet.
-                    self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
-                elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
-                    # `imgscale` in u.pc
-                    self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
-                else:
-                    if isinstance(imgscale, numbers.Number):
-                        self.imgscale = float(imgscale) * u.pc
-                        warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                if (self.header is not None):
+                    if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+                        # `imgscale` in u.pc
+                        ## The change to u.pc has not been cleaned up for the rest of the code, yet.
+                        self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
+                    elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+                        # `imgscale` in u.pc
+                        self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
                     else:
-                        raise TypeError("Please specify a proper `imgscale` in parsec if the information is not in the header.")
+                        if isinstance(imgscale, numbers.Number):
+                            self.imgscale = float(imgscale) * u.pc
+                            warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                        else:
+                            self.imgscale = 1. * u.pix
+                            warnings.warn("Calculate in pixel scales.")
+                ##
+                else:
+                    self.imgscale = 1. * u.pix
+                    warnings.warn("Calculate in pixel scales.")
 
         else:
             self.filspine = None
@@ -172,18 +183,31 @@ class radfil(object):
 
         # Read beamwidth
         if isinstance(beamwidth, numbers.Number):
-            self.beamwidth = beamwidth * u.arcsec
+            if (self.header is not None):
+                self.beamwidth = beamwidth * u.arcsec
+            else:
+                self.beamwidth = beamwidth * u.pix
+
         else:
             self.beamwidth = None
             warnings.warn("A beamwidth is needed if the header does not contain the beam information.")
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
-        fils = fil_finder_2D(self.image,
-                             self.header,
-                             beamwidth=self.beamwidth,
-                             distance=self.distance,
-                             mask=self.mask)
+        if (self.header is not None):
+            fils = fil_finder_2D(self.image,
+                                 header = self.header,
+                                 beamwidth = self.beamwidth,
+                                 distance = self.distance,
+                                 mask = self.mask)
+        ## scale-free
+        else:
+            fils = fil_finder_2D(self.image,
+                                 beamwidth = self.beamwidth,
+                                 skel_thresh = 15,
+                                 mask = self.mask)
+            ## 15 is chosen to be roughly 0.3 pc at the distance to Per B5 (260 pc).
+            ## Consider allowing users to input in the future.
 
         # do the skeletonization
         fils.medskel(verbose=verbose)
@@ -193,8 +217,12 @@ class radfil(object):
 
         # Return the reults.
         self.filspine = fils.skeleton_longpath.astype(bool)
-        self.length = np.sum(analysis.lengths) * u.pc
-        self.imgscale = fils.imgscale * u.pc
+        if (self.header is not None):
+            self.length = np.sum(analysis.lengths) * u.pc
+            self.imgscale = fils.imgscale * u.pc
+        else:
+            self.length = np.sum(analysis.lengths) * u.pix
+            self.imgscale = fils.imgscale * u.pix
 
         return self
 
@@ -359,12 +387,20 @@ class radfil(object):
 
             # Extract the profiles
             dictionary_cuts = defaultdict(list)
-            for n in range(len(self.points)):
-                profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
-                dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value) ## in pc
-                dictionary_cuts['profile'].append(profile[1])
-                dictionary_cuts['plot_peaks'].append(profile[2])
-                dictionary_cuts['plot_cuts'].append(profile[3])
+            if (self.imgscale.unit == u.pc):
+                for n in range(len(self.points)):
+                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
+                    dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pc).value) ## in pc
+                    dictionary_cuts['profile'].append(profile[1])
+                    dictionary_cuts['plot_peaks'].append(profile[2])
+                    dictionary_cuts['plot_cuts'].append(profile[3])
+            elif (self.imgscale.unit == u.pix):
+                for n in range(len(self.points)):
+                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
+                    dictionary_cuts['distance'].append(profile[0]*self.imgscale.to(u.pix).value) ## in pc
+                    dictionary_cuts['profile'].append(profile[1])
+                    dictionary_cuts['plot_peaks'].append(profile[2])
+                    dictionary_cuts['plot_cuts'].append(profile[3])
 
             # Return the complete set of cuts. Including those outside `cutdist`.
             self.dictionary_cuts = dictionary_cuts
@@ -409,10 +445,16 @@ class radfil(object):
 
             # Extract the distances and the heights
             dictionary_cuts = {}
-            dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pc).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
-            dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
-            dictionary_cuts['plot_peaks'] = None
-            dictionary_cuts['plot_cuts'] = None
+            if (self.imgscale.unit == u.pc):
+                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pc).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['plot_peaks'] = None
+                dictionary_cuts['plot_cuts'] = None
+            elif (self.imgscale.unit == u.pix):
+                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pix).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['plot_peaks'] = None
+                dictionary_cuts['plot_cuts'] = None
             self.dictionary_cuts = dictionary_cuts
 
 
@@ -468,7 +510,7 @@ class radfil(object):
 
         return self
 
-    def fit_profile(self, bgdist = .05, bgdistfrom = 'outside', fitdist = 3., verbose=False):
+    def fit_profile(self, bgdist = None, bgdistfrom = 'outside', fitdist = None, verbose=False):
 
         """
         Fit a model to the filament's master profile
@@ -728,6 +770,7 @@ class radfil(object):
         '''
         Return a `radfil.plot.RadFilPlotter` class.
         '''
+        print "This is a feature under active development. Use at your own risk."
 
         from radfil import plot
         return plot.RadFilPlotter(self)
