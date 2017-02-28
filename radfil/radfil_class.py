@@ -190,7 +190,7 @@ class radfil(object):
 
         else:
             self.beamwidth = None
-            warnings.warn("A beamwidth is needed if the header does not contain the beam information.")
+            raise TypeError("A beamwidth is needed if the header does not contain the beam information.")
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
@@ -496,7 +496,8 @@ class radfil(object):
             print "No binning is applied."
 
 
-
+        # Close the figure
+        #plt.close()
 
         # Return the profile sent to `fit_profile`.
         self.masterx=masterx
@@ -760,7 +761,8 @@ class radfil(object):
         axis.set_xlim(np.min(self.xall), np.max(self.xall))
         axis.set_yticklabels([])
 
-
+        # Close the figure
+        #plt.close()
 
 
         return self
