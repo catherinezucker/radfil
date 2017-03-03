@@ -158,6 +158,20 @@ class radfil(object):
                                      constant_values = 0)
 
 
+        # Return a dictionary to store the key setup Parameters
+        ## (all padded)
+        params = {'image': self.image,
+                  'mask': self.mask,
+                  'header': self.header,
+                  'distance': self.distance,
+                  'padsize': self.padsize,
+                  'imgscale': self.imgscale}
+        self._params = {'__init__': params}
+
+        # Return a dictionary to store the results.
+        self._results = {'make_fil_spine': {'filspine': self.filspine}}
+
+
     def make_fil_spine(self,beamwidth=None,verbose=False):
 
         """
@@ -223,6 +237,15 @@ class radfil(object):
         else:
             self.length = np.sum(analysis.lengths) * u.pix
             self.imgscale = fils.imgscale * u.pix
+
+        # Return a dictionary to store the key setup Parameters
+        self._params['__init__']['imgscale'] = self.imgscale
+        params = {'beamwidth': self.beamwidth}
+        self._params = {'make_fil_spine': params}
+
+        # Return a dictionary to store the results
+        self._results['make_fil_spine']['filspine'] = self.filspine
+        self._results['make_fil_spine']['length'] = self.length
 
         return self
 
@@ -413,6 +436,7 @@ class radfil(object):
         else:
             ## warnings.warn if samp_int exists.
             if (self.samp_int is not None):
+                self.samp_int = None
                 warnings.warn("samp_int is not used. cut is False.")
             ## warnings.warn if shift and/or wrap is True.
             if (self.shift or self.wrap):
@@ -481,6 +505,8 @@ class radfil(object):
             masterx = bins[:-1]+.5*np.diff(bins)
             mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
+
+            self.bins = bins
         ## If the input is the edges of bins:
         elif isinstance(bins, np.ndarray) and (bins.ndim == 1):
             self.binning = True
@@ -488,9 +514,12 @@ class radfil(object):
             masterx = bins[:-1]+.5*np.diff(bins) ## assumes linear binning.
             mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
+
+            self.bins = bins
         ## If the input is not bins-like.
         else:
             self.binning = False
+            self.bins = None
             masterx = self.xall
             mastery = self.yall
             print "No binning is applied."
@@ -508,6 +537,30 @@ class radfil(object):
             self.image=self.image[self.padsize:self.image.shape[0]-self.padsize,self.padsize:self.image.shape[1]-self.padsize]
             self.mask=self.mask[self.padsize:self.mask.shape[0]-self.padsize,self.padsize:self.mask.shape[1]-self.padsize]
             self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
+
+        # Return a dictionary to store the key setup Parameters
+        self._params['__init__']['image'] = self.image ## (unpadded)
+        self._params['__init__']['mask'] = self.mask ## This is the intersection between all the masks
+        params = {'cutting': self.cutting,
+                  'binning': self.binning,
+                  'shift': self.shift,
+                  'wrap': self.wrap,
+                  'bins': self.bins,
+                  'samp_int': self.samp_int}
+        self._params = {'build_profile': params}
+
+        # Return a dictionary to store the results
+        ## "points" are the spline points used for the cuts or
+        ## the point collection of the original spine in the
+        ## "no-cutting" case.
+        ## "dictionary_cuts" are for plotting, mainly.
+        results = {'points': self.points,
+                   'xall': self.xall,
+                   'yall': self.yall,
+                   'masterx': self.masterx,
+                   'mastery': self.mastery,
+                   'dictionary_cuts': self.dictionary_cuts}
+        self._results['build_profile'] = results
 
         return self
 
@@ -763,6 +816,23 @@ class radfil(object):
 
         # Close the figure
         #plt.close()
+
+        # Return a dictionary to store the key setup Parameters
+        params = {'bgdist': self.bgdist,
+                  'bgdistfrom': self.bgdistfrom,
+                  'fitdist': self.fitdist}
+        self._params = {'fit_profile': params}
+
+        # Return a dictionary to store the results
+        ## All the fits are `astropy.model` objects.
+        results = {'bgfit': self.bgfit,
+                   'profilefit_gaussian': self.profilefit_gaussian,
+                   'profilefit_plummer': self.profilefit_plummer,
+                   'xbg': self.xbg,
+                   'ybg': self.ybg,
+                   'xfit': self.xfit,
+                   'yfit': self.yfit}
+        self._results['fit_profile'] = results
 
 
         return self
