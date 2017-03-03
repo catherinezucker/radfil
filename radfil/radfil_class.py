@@ -131,9 +131,15 @@ class radfil(object):
                 else:
                     self.imgscale = 1. * u.pix
                     warnings.warn("Calculate in pixel scales.")
+            ##
+            # When there is not `filspine` in the input.
+            else:
+                self.fispine = None
+                self.imgscale = None
 
         else:
             self.filspine = None
+            self.imgscale = None
             warnings.warn("The input `filspine` has to be a 2D numpy array. Ignore for now.")
 
 
@@ -241,7 +247,7 @@ class radfil(object):
         # Return a dictionary to store the key setup Parameters
         self._params['__init__']['imgscale'] = self.imgscale
         params = {'beamwidth': self.beamwidth}
-        self._params = {'make_fil_spine': params}
+        self._params['make_fil_spine'] = params
 
         # Return a dictionary to store the results
         self._results['make_fil_spine']['filspine'] = self.filspine
@@ -547,7 +553,7 @@ class radfil(object):
                   'wrap': self.wrap,
                   'bins': self.bins,
                   'samp_int': self.samp_int}
-        self._params = {'build_profile': params}
+        self._params['build_profile'] = params
 
         # Return a dictionary to store the results
         ## "points" are the spline points used for the cuts or
@@ -821,7 +827,7 @@ class radfil(object):
         params = {'bgdist': self.bgdist,
                   'bgdistfrom': self.bgdistfrom,
                   'fitdist': self.fitdist}
-        self._params = {'fit_profile': params}
+        self._params['fit_profile'] = params
 
         # Return a dictionary to store the results
         ## All the fits are `astropy.model` objects.
