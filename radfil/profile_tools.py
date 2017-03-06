@@ -318,6 +318,9 @@ def get_radial_prof(radobj,maxcolx,maxcoly,ax=None,cutdist=3.0):
         findxbound=np.linspace(a-deltamax,a+deltamax,1000000)
         findybound=np.array(fa+(-1.0/fprime)*(findxbound-a)) # tangent
 
+        if (np.min(findybound)<0) or (np.max(findybound)>radobj.image.shape[0]) or (np.min(findxbound) <0) or (np.max(findxbound)>radobj.image.shape[1]):
+            raise IndexError("Not enough buffer around profile to build out to specified cutdist. Please choose a smaller cutdist and try again.")
+
         unique,indices,inverse,counts=np.unique(indexedarr[findybound.astype(int),findxbound.astype(int)],return_index=True,return_inverse=True,return_counts=True)
 
         uniquex=findxbound.astype(int)[indices]
