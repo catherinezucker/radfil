@@ -59,4 +59,12 @@ docs/_build/
 target/
 
 #Ipython Notebook
-.ipynb_checkpoints
+RadFil_dev.ipynb
+*.ipynb_checkpoints
+RadFil_testing.ipynb
+
+# Keynote files for presentation
+testingResults.key
+
+# code backup
+*.py.orig
