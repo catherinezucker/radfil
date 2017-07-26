@@ -186,6 +186,7 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
 
     return final_dist, image_line, (xpeak, ypeak), (start, end)
 
-
+    
+def make_master_prof(xtot,ytot,cutdist=3.0,numbins=120):
 
 ### The following functions might be redundant after profile_builder gets used.
