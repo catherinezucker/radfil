@@ -61,7 +61,6 @@ target/
 #Ipython Notebook
 RadFil_dev.ipynb
 *.ipynb_checkpoints
-RadFil_testing.ipynb
 
 # Keynote files for presentation
 testingResults.key
