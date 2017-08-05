@@ -430,9 +430,11 @@ class radfil(object):
                     dictionary_cuts['plot_cuts'].append(profile[3])
 
                     ##
+                    dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
+                    ##
                     if isinstance(profile_edge, numbers.Number):
-                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1]),
-                                                                             mask = (abs(cut_distance) >= profile_edge))
+                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
+                                                                             mask = (abs(cut_distance) >= profile_edge)))
             elif (self.imgscale.unit == u.pix):
                 for n in range(len(self.points)):
                     profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
@@ -443,9 +445,11 @@ class radfil(object):
                     dictionary_cuts['plot_cuts'].append(profile[3])
 
                     ##
+                    dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
+                    ##
                     if isinstance(profile_edge, numbers.Number):
-                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1]),
-                                                                             mask = (abs(cut_distance) >= profile_edge))
+                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
+                                                                             mask = (abs(cut_distance) >= profile_edge)))
 
 
             # Return the complete set of cuts. Including those outside `cutdist`.
