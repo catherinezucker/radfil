@@ -324,10 +324,6 @@ class radfil(object):
             A dictionary containing the profile (radian distances and height)
             for each cut along the spline, as two lists--one for the distance,
             and the other for the height.
-
-        distpc: numpy.ndarray
-            A numpy array containing the physical size of each "local width" cut. Can take
-            the mean/median to determine representative width of the filament mask
         """
 
 
