@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import astropy.units as u
 import astropy.constants as c
 from astropy.modeling import models, fitting
+from astropy.stats import sigma_clip
 from astropy.io import fits
 from fil_finder import fil_finder_2D
 import shapely.geometry as geometry
@@ -570,7 +571,7 @@ class radfil(object):
 
         return self
 
-    def fit_profile(self, bgdist = None, bgdistfrom = 'outside', fitdist = None, verbose=False):
+    def fit_profile(self, bgdist = None, fitdist = None, verbose=False):
 
         """
         Fit a model to the filament's master profile
@@ -582,17 +583,11 @@ class radfil(object):
         fitdist: number-like
             The radial distance (in units of pc) out to which you'd like to fit your profile.
 
-        bgdist: number-like
-            The distance in pc for the background removal.  See bgdistfrom.
+        bgdist: tuple-like, with a shape (2,)
+            The radial distance range that defines the data points to be used in background subtraction.
 
-        bgdistfrom: 'outside' or 'inside'
-            This indicates whether bgdist is from "outside" or "inside".  For example,
-                bgdist = .1, bgdistfrom = 'outside'
-            This means that data in the outtermost 0.1 pc will be used for background removal.
+            Use np.inf for indefinite boundaries.
 
-            Another example,
-                bgdist = .5, bgdistfrom = 'inside'
-            This means that data 0.5 pc or further away from the spine will be used for background removal.
 
         verbose: boolean,optional (default=False)
             Would you like to display the plots?
@@ -615,35 +610,24 @@ class radfil(object):
 
         """
         # Mask for bg removal
-        ## The outter most `bgdist` pc is treated as the background
-        if isinstance(bgdist, numbers.Number) and (bgdistfrom.lower() == 'outside'):
-            self.bgdist = bgdist ## assuming pc
-            self.bgdistfrom = bgdistfrom.lower()
+        ## take only bgdist, which should be a 2-tuple or 2-list
+        if np.asarray(bgdist).shape == (2,):
+            self.bgdist = np.sort(bgdist)
             if self.wrap:
-                maskbg = ((self.masterx >= (np.max(self.masterx)-bgdist))&\
-                        np.isfinite(self.mastery))
+                maskbg = ((self.masterx >= self.bgdist[0])&\
+                          (self.masterx < self.bgdist[1])&\
+                          np.isfinite(self.mastery))
             else:
-                maskbg = (((self.masterx < (np.min(self.masterx)+bgdist))|\
-                        (self.masterx >= (np.max(self.masterx)-bgdist)))&\
-                        np.isfinite(self.mastery))
+                maskbg = ((abs(self.masterx) >= self.bgdist[0])&\
+                          (abs(self.masterx) < self.bgdist[1])&\
+                          np.isfinite(self.mastery))
 
             if sum(maskbg) == 0.:
                 raise ValueError("Reset bgdist; there is no data to fit for the background.")
-        ## Anything outside `bgdist` pc is treated as the background.
-        elif isinstance(bgdist, numbers.Number) and (bgdistfrom.lower() == 'inside'):
-            self.bgdist = bgdist ## assuming pc
-            self.bgdistfrom = bgdistfrom.lower()
-            maskbg = (((self.masterx < (-bgdist))|\
-                    (self.masterx >= bgdist))&\
-                    np.isfinite(self.mastery))
-
-            if sum(maskbg) == 0.:
-                raise ValueError("Reset bgdist; there is no data to fit for the background.")
-        ## No background removal.
         else:
             self.bgdist = None
-            self.bgdistfrom = None
             warnings.warn("No background removal will be performed.")
+
 
 
 
@@ -669,7 +653,7 @@ class radfil(object):
 
         # Fit for the background, and remove
         ## If bgdist (yes, background removal.)
-        if isinstance(self.bgdist, numbers.Number):
+        if np.asarray(self.bgdist).shape == (2,):
             ## In the case where the profile is wrapped, simply take the mean in the background.
             ## This is because that a linear fit (with a slope) with only one side is not definite.
             if self.wrap:
@@ -677,6 +661,7 @@ class radfil(object):
                 xbg, ybg = xbg[maskbg], ybg[maskbg]
                 self.xbg, self.ybg = xbg, ybg
                 self.bgfit = np.median(self.ybg) ### No fitting!
+                self.ybg_filtered = None ## no filtering during background removal
                 ## Remove bg without fitting (or essentially a constant fit).
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit
@@ -688,8 +673,13 @@ class radfil(object):
                 self.xbg, self.ybg = xbg, ybg
                 bg_init = models.Linear1D(intercept = np.mean(self.ybg))
                 fit_bg = fitting.LinearLSQFitter()
+                ## outlier removal; use sigma clipping, set to 3 sigmas
+                fit_bg_or = fitting.FittingWithOutlierRemoval(fit_bg, sigma_clip,
+                                                              niter=10, sigma=3.)
                 bg = fit_bg(bg_init, self.xbg, self.ybg)
-                self.bgfit = bg.copy()
+                data_or, bg_or = fit_bg_or(bg_init, self.xbg, self.ybg)
+                self.bgfit = bg_or.copy()
+                self.ybg_filtered = data_or ## a masked array returned by the outlier removal
                 ## Remove bg and prepare for fitting
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit(xfit)
@@ -697,6 +687,7 @@ class radfil(object):
         else:
             self.bgfit = None
             self.xbg, self.ybg = None, None
+            self.ybg_filtered = None
             ## Set up fitting without bg removal.
             xfit, yfit = self.masterx[mask], self.mastery[mask]
         self.xfit, self.yfit = xfit, yfit
@@ -746,7 +737,7 @@ class radfil(object):
             stepy[::2], stepy[1::2] = self.mastery, self.mastery
             axis.plot(stepx, stepy, 'k-', alpha = .4)
         ## Plot bg if bg removed.
-        if isinstance(self.bgdist, numbers.Number):
+        if np.asarray(self.bgdist).shape == (2,):
             if self.wrap:
                 axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
                 axis.plot(self.xfit, self.yfit+self.bgfit, 'b.', markersize = 8., alpha = .15)
@@ -754,7 +745,10 @@ class radfil(object):
                 xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
                 axis.plot(xplot, self.bgfit+self.profilefit_plummer(xplot), 'b-', lw = 3., alpha = .6)
             else:
-                axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
+                if isinstance(self.ybg_filtered, np.ndarray):
+                    axis.plot(self.xbg, self.ybg_filtered, 'g.', markersize = 8., alpha = .15)
+                else:
+                    axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
                 axis.plot(self.xfit, self.yfit+self.bgfit(self.xfit), 'b.', markersize = 8., alpha = .15)
                 ## Plot the fits (profilefit + bgfit)
                 xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
@@ -790,7 +784,7 @@ class radfil(object):
             stepy[::2], stepy[1::2] = self.mastery, self.mastery
             axis.plot(stepx, stepy, 'k-', alpha = .4)
         ## Plot bg if bg removed.
-        if isinstance(self.bgdist, numbers.Number):
+        if np.asarray(self.bgdist).shape == (2,):
             if self.wrap:
                 axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
                 axis.plot(self.xfit, self.yfit+self.bgfit, 'r.', markersize = 8., alpha = .15)
@@ -798,7 +792,10 @@ class radfil(object):
                 xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
                 axis.plot(xplot, self.bgfit+self.profilefit_gaussian(xplot), 'r-', lw = 3., alpha = .6)
             else:
-                axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
+                if isinstance(self.ybg_filtered, np.ndarray):
+                    axis.plot(self.xbg, self.ybg_filtered, 'g.', markersize = 8., alpha = .15)
+                else:
+                    axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
                 axis.plot(self.xfit, self.yfit+self.bgfit(self.xfit), 'r.', markersize = 8., alpha = .15)
                 ## Plot the fits (profilefit + bgfit)
                 xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
@@ -825,7 +822,6 @@ class radfil(object):
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
-                  'bgdistfrom': self.bgdistfrom,
                   'fitdist': self.fitdist}
         self._params['fit_profile'] = params
 
