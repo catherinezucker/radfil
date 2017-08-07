@@ -256,7 +256,7 @@ class radfil(object):
 
         return self
 
-    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True, profile_edge = None):
+    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True, cutdist = None):
 
         """
         Build the filament profile using the inputted or recently created filament spine
@@ -299,7 +299,7 @@ class radfil(object):
             Setting `cut = False` will make `radfil` calculate a distance and a
             height/value for every pixel inside the mask.
 
-        profile_edge: float, optional (default = None)
+        cutdist: float, optional (default = None)
             The distance out to which the profile is maked and stored in profile_masked.
 
         Attributes
@@ -428,9 +428,9 @@ class radfil(object):
                     ##
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
                     ##
-                    if isinstance(profile_edge, numbers.Number):
+                    if isinstance(cutdist, numbers.Number):
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
-                                                                             mask = (abs(cut_distance) >= profile_edge)))
+                                                                             mask = (abs(cut_distance) >= cutdist)))
             elif (self.imgscale.unit == u.pix):
                 for n in range(len(self.points)):
                     profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
@@ -443,9 +443,9 @@ class radfil(object):
                     ##
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
                     ##
-                    if isinstance(profile_edge, numbers.Number):
+                    if isinstance(cutdist, numbers.Number):
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
-                                                                             mask = (abs(cut_distance) >= profile_edge)))
+                                                                             mask = (abs(cut_distance) >= cutdist)))
 
 
             # Return the complete set of cuts. Including those outside `cutdist`.
@@ -499,9 +499,9 @@ class radfil(object):
                 dictionary_cuts['plot_cuts'] = None
 
                 ##
-                if isinstance(profile_edge, numbers.Number):
+                if isinstance(cutdist, numbers.Number):
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
-                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= profile_edge)
+                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             elif (self.imgscale.unit == u.pix):
                 dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pix).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
                 dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
@@ -509,15 +509,18 @@ class radfil(object):
                 dictionary_cuts['plot_cuts'] = None
 
                 ##
-                if isinstance(profile_edge, numbers.Number):
+                if isinstance(cutdist, numbers.Number):
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
-                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= profile_edge)
+                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             self.dictionary_cuts = dictionary_cuts
 
 
 
         # Stack the result.
-        xall, yall = np.concatenate(self.dictionary_cuts['distance']), np.concatenate(self.dictionary_cuts['profile'])
+        ## xall, yall = np.concatenate(self.dictionary_cuts['distance']), np.concatenate(self.dictionary_cuts['profile'])
+        mask_cutdist = np.concatenate([~singlecut.mask for singlecut in self.dictionary_cuts['profile_masked']])
+        xall, yall = np.concatenate(self.dictionary_cuts['distance'])[mask_cutdist],\
+                     np.concatenate(self.dictionary_cuts['profile'])[mask_cutdist]
         #xall, yall = xall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
         #                   (xall < (self.cutdist/self.imgscale).decompose().value)],\
         #             yall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
@@ -525,6 +528,8 @@ class radfil(object):
         ## Store the values.
         self.xall = xall ## in pc
         self.yall = yall
+
+        ### the following operations, including binning and fitting, should be done on self.xall and self.yall.
 
 
         # Bin the profiles (if nobins=False) or stack the profiles (if nobins=True)
@@ -580,7 +585,7 @@ class radfil(object):
                   'wrap': self.wrap,
                   'bins': self.bins,
                   'samp_int': self.samp_int,
-                  'profile_edge': profile_edge}
+                  'cutdist': cutdist}
         self._params['build_profile'] = params
 
         # Return a dictionary to store the results

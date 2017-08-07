@@ -149,17 +149,27 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
 
     # Create the final mask; find the region where the initial point is at and
     # exclude regions that are not connected. (For a very curved spine.)
-    final_mask = (line_mask*mask)
+    ##### This was used, which finds only the cuts within the orginal mask that was used to find the spine.
+    ##
+    final_mask0 = (line_mask*mask)
+    final_mask0 = (morphology.label(final_mask0) == morphology.label(final_mask0)[int(round(y0)), int(round(x0))])
+    ##
+    final_mask = line_mask#*np.ones(mask.shape, dtype = bool)
     final_mask = (morphology.label(final_mask) == morphology.label(final_mask)[int(round(y0)), int(round(x0))])
 
     # Extract the profile from the image.
+    ##
+    final_idx0 = sorted(zip(np.where(final_mask0)[1], np.where(final_mask0)[0]))
+    image_line0 = image[np.asarray(final_idx0)[:, 1], np.asarray(final_idx0)[:, 0]]
+    ##
     final_idx = sorted(zip(np.where(final_mask)[1], np.where(final_mask)[0]))
     image_line = image[np.asarray(final_idx)[:, 1], np.asarray(final_idx)[:, 0]]
 
+
     # Plot.
-    peak_finder = [t for t in centers if (round(t[0]), round(t[1])) in final_idx]
+    peak_finder = [t for t in centers if (round(t[0]), round(t[1])) in final_idx0]
     start, end = peak_finder[0], peak_finder[-1]
-    xpeak, ypeak = np.asarray(peak_finder)[image_line == np.max(image_line)][0]
+    xpeak, ypeak = np.asarray(peak_finder)[image_line0 == np.nanmax(image_line0)][0]
     axis.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth = 1.)
 
     # Shift.
