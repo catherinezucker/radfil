@@ -118,9 +118,11 @@ class radfil(object):
                         # `imgscale` in u.pc
                         ## The change to u.pc has not been cleaned up for the rest of the code, yet.
                         self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
+                        #self.imgscale_ang = abs(header["CDELT1"]) # degrees
                     elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
                         # `imgscale` in u.pc
                         self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
+                        #self.imgscale_ang = abs(header["CDELT1"]) # degrees
                     else:
                         if isinstance(imgscale, numbers.Number):
                             self.imgscale = float(imgscale) * u.pc
@@ -645,6 +647,7 @@ class radfil(object):
         ## take only bgdist, which should be a 2-tuple or 2-list
         if np.asarray(bgdist).shape == (2,):
             self.bgdist = np.sort(bgdist)
+            ## below can be merged... ##########
             if self.wrap:
                 maskbg = ((self.masterx >= self.bgdist[0])&\
                           (self.masterx < self.bgdist[1])&\
@@ -741,12 +744,16 @@ class radfil(object):
         print 'amplitude: %.3E'%self.profilefit_gaussian.parameters[0]
         print 'width: %.3f'%self.profilefit_gaussian.parameters[2]
         ## Plummer model
+        ###### temporary fix by not assigning bounds... ##########
+        #g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
+        #                   powerIndex=2.,
+        #                   flatteningRadius = np.std(self.xfit),
+        #                   bounds = {'amplitude': (0., np.inf),
+        #                             'powerIndex': (1., np.inf),
+        #                             'flatteningRadius': (0., np.inf)})
         g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
                            powerIndex=2.,
-                           flatteningRadius = np.std(self.xfit),
-                           bounds = {'amplitude': (0., np.inf),
-                                     'powerIndex': (1., np.inf),
-                                     'flatteningRadius': (0., np.inf)})
+                           flatteningRadius = np.std(self.xfit))
         fit_g = fitting.LevMarLSQFitter()
         g = fit_g(g_init, self.xfit, self.yfit)
         self.profilefit_plummer = g.copy()
@@ -865,7 +872,10 @@ class radfil(object):
                    'xbg': self.xbg,
                    'ybg': self.ybg,
                    'xfit': self.xfit,
-                   'yfit': self.yfit}
+                   'yfit': self.yfit,
+                   'FWHM': 2.*np.sqrt(2.*np.log(2.))*self.profilefit_gaussian.parameters[2]}
+        #if self.beamwidth.unit == u.arcsec:
+        #    beamwidth_phys = self.beamwidth*3600./self.imgscale_ang
         self._results['fit_profile'] = results
 
 
