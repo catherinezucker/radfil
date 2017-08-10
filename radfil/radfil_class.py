@@ -89,9 +89,14 @@ class radfil(object):
         # Read header
         if (isinstance(header, fits.header.Header)):
             self.header = header
+            if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+                self.imgscale_ang = abs(header["CDELT1"])*u.deg # degrees
+            elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+                self.imgscale_ang = abs(header["CD1_1"])*u.deg # degrees
         else:
             self.header = None
             self.distance = None
+            self.imgscale_ang = None
             warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
 
         # Read distance
@@ -118,11 +123,9 @@ class radfil(object):
                         # `imgscale` in u.pc
                         ## The change to u.pc has not been cleaned up for the rest of the code, yet.
                         self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
-                        #self.imgscale_ang = abs(header["CDELT1"]) # degrees
                     elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
                         # `imgscale` in u.pc
                         self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
-                        #self.imgscale_ang = abs(header["CDELT1"]) # degrees
                     else:
                         if isinstance(imgscale, numbers.Number):
                             self.imgscale = float(imgscale) * u.pc
@@ -878,11 +881,27 @@ class radfil(object):
                    'xbg': self.xbg,
                    'ybg': self.ybg,
                    'xfit': self.xfit,
-                   'yfit': self.yfit,
-                   'FWHM': 2.*np.sqrt(2.*np.log(2.))*self.profilefit_gaussian.parameters[2]}
-        #if self.beamwidth.unit == u.arcsec:
-        #    beamwidth_phys = self.beamwidth*3600./self.imgscale_ang
+                   'yfit': self.yfit}
         self._results['fit_profile'] = results
+
+        # Return FWHM from both Plummer and Guassian
+        FWHM = {'gaussian': 2.*np.sqrt(2.*np.log(2.))*self.profilefit_gaussian.parameters[2],
+                'plummer': 2.*self.profilefit_plummer.parameters[2]*\
+                           np.sqrt(2.**(2./(self.profilefit_plummer.parameters[1]-1.)) - 1.)}
+        if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
+            beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
+            print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
+        if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
+            FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
+        else:
+            FWHM['gaussian_deconvolved'] = np.nan
+            warnings.warn("The Gaussian width is not resolved.")
+        if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
+            FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
+        else:
+            FWHM['plummer_deconvolved'] = np.nan
+            warnings.warn("The Plummer width is not resolved.")
+        self._results['FWHM'] = FWHM
 
 
         return self
