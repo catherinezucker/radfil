@@ -627,7 +627,7 @@ class radfil(object):
             Would you like to display the plots?
 
         bgdegree: integer (default = 1)
-            The order of the polynomial used in background subtraction.
+            The order of the polynomial used in background subtraction.  Active only when wrap = False.
 
         Attributes
         ------
@@ -703,6 +703,7 @@ class radfil(object):
                 ## Remove bg without fitting (or essentially a constant fit).
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit
+                print "The profile is wrapped. Use the 0th order polynomial in BG subtraction."
             ## A first-order bg removal is carried out only when the profile is not wrapped.
             else:
                 ## Fit bg
@@ -749,15 +750,19 @@ class radfil(object):
         print 'width: %.3f'%self.profilefit_gaussian.parameters[2]
         ## Plummer model
         ###### temporary fix by not assigning bounds... ##########
+        #g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
+        #                   powerIndex=2.,
+        #                   flatteningRadius = np.std(self.xfit),
+        #                   bounds = {'amplitude': (0., np.inf),
+        #                             'powerIndex': (0., np.inf),
+        #                             'flatteningRadius': (0., np.inf)})
         g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
                            powerIndex=2.,
-                           flatteningRadius = np.std(self.xfit),
-                           bounds = {'amplitude': (0., np.inf),
-                                     'powerIndex': (0., np.inf),
-                                     'flatteningRadius': (0., np.inf)})
+                           flatteningRadius = np.std(self.xfit))
         fit_g = fitting.LevMarLSQFitter()
         g = fit_g(g_init, self.xfit, self.yfit)
         self.profilefit_plummer = g.copy()
+        self.profilefit_plummer.parameters[2] = abs(self.profilefit_plummer.parameters[2]) ##########
         print '==== Plummer-like ===='
         print 'amplitude: %.3E'%self.profilefit_plummer.parameters[0]
         print 'p: %.3f'%self.profilefit_plummer.parameters[1]
