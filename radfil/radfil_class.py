@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 import astropy.units as u
 import astropy.constants as c
-from astropy.modeling import models, fitting
+from astropy.modeling import models, fitting, polynomial
 from astropy.stats import sigma_clip
 from astropy.io import fits
 from fil_finder import fil_finder_2D
@@ -605,7 +605,7 @@ class radfil(object):
 
         return self
 
-    def fit_profile(self, bgdist = None, fitdist = None, verbose=False):
+    def fit_profile(self, bgdist = None, fitdist = None, verbose=False, bgdegree = 1):
 
         """
         Fit a model to the filament's master profile
@@ -625,6 +625,9 @@ class radfil(object):
 
         verbose: boolean,optional (default=False)
             Would you like to display the plots?
+
+        bgdegree: integer (default = 1)
+            The order of the polynomial used in background subtraction.
 
         Attributes
         ------
@@ -706,7 +709,8 @@ class radfil(object):
                 xbg, ybg = self.masterx, self.mastery
                 xbg, ybg = xbg[maskbg], ybg[maskbg]
                 self.xbg, self.ybg = xbg, ybg
-                bg_init = models.Linear1D(intercept = np.mean(self.ybg))
+                #bg_init = models.Linear1D(intercept = np.mean(self.ybg))
+                bg_init = models.Polynomial1D(degree = bgdegree) ##########
                 fit_bg = fitting.LinearLSQFitter()
                 ## outlier removal; use sigma clipping, set to 3 sigmas
                 fit_bg_or = fitting.FittingWithOutlierRemoval(fit_bg, sigma_clip,
