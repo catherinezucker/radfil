@@ -745,15 +745,12 @@ class radfil(object):
         print 'width: %.3f'%self.profilefit_gaussian.parameters[2]
         ## Plummer model
         ###### temporary fix by not assigning bounds... ##########
-        #g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
-        #                   powerIndex=2.,
-        #                   flatteningRadius = np.std(self.xfit),
-        #                   bounds = {'amplitude': (0., np.inf),
-        #                             'powerIndex': (1., np.inf),
-        #                             'flatteningRadius': (0., np.inf)})
         g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
                            powerIndex=2.,
-                           flatteningRadius = np.std(self.xfit))
+                           flatteningRadius = np.std(self.xfit),
+                           bounds = {'amplitude': (0., np.inf),
+                                     'powerIndex': (0., np.inf),
+                                     'flatteningRadius': (0., np.inf)})
         fit_g = fitting.LevMarLSQFitter()
         g = fit_g(g_init, self.xfit, self.yfit)
         self.profilefit_plummer = g.copy()
