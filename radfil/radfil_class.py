@@ -428,7 +428,7 @@ class radfil(object):
                     dictionary_cuts['plot_cuts'].append(profile[3])
 
                     ##
-                    dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
+                    dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length*self.imgscale.value)
                     ##
                     if isinstance(cutdist, numbers.Number):
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
