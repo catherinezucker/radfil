@@ -891,16 +891,33 @@ class radfil(object):
         if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
             beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
             print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
-        if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
-            FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
+            if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
+                FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
+            else:
+                FWHM['gaussian_deconvolved'] = np.nan
+                warnings.warn("The Gaussian width is not resolved.")
+            if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
+                FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
+            else:
+                FWHM['plummer_deconvolved'] = np.nan
+                warnings.warn("The Plummer width is not resolved.")
+        elif (self.beamwidth.unit == u.pix):
+            beamwidth_phys = self.beamwidth.value
+            print 'Beamwidth in the Pixel Unit:', self.beamwidth
+            if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
+                FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
+            else:
+                FWHM['gaussian_deconvolved'] = np.nan
+                warnings.warn("The Gaussian width is not resolved.")
+            if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
+                FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
+            else:
+                FWHM['plummer_deconvolved'] = np.nan
+                warnings.warn("The Plummer width is not resolved.")
         else:
             FWHM['gaussian_deconvolved'] = np.nan
-            warnings.warn("The Gaussian width is not resolved.")
-        if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
-            FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
-        else:
             FWHM['plummer_deconvolved'] = np.nan
-            warnings.warn("The Plummer width is not resolved.")
+            warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
         self._results['FWHM'] = FWHM
 
 
