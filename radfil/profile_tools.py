@@ -160,11 +160,18 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     # Extract the profile from the image.
     ##
     final_idx0 = sorted(zip(np.where(final_mask0)[1], np.where(final_mask0)[0]))
-    image_line0 = image[np.asarray(final_idx0)[:, 1], np.asarray(final_idx0)[:, 0]]
+    #image_line0 = image[np.asarray(final_idx0)[:, 1], np.asarray(final_idx0)[:, 0]]
+    if (derivative[0]*derivative[1] >= 0.):
+        image_line0 = image[final_mask0][::-1]
+    elif derivative[0]*derivative[1] < 0:
+        image_line0 = image[final_mask0]
     ##
     final_idx = sorted(zip(np.where(final_mask)[1], np.where(final_mask)[0]))
-    image_line = image[np.asarray(final_idx)[:, 1], np.asarray(final_idx)[:, 0]]
-
+    #image_line = image[np.asarray(final_idx)[:, 1], np.asarray(final_idx)[:, 0]]
+    if (derivative[0]*derivative[1] >= 0.):
+        image_line = image[final_mask][::-1]
+    elif derivative[0]*derivative[1] < 0:
+        image_line = image[final_mask]
 
     # Plot.
     peak_finder = [t for t in centers if (round(t[0]), round(t[1])) in final_idx0]
