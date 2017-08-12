@@ -799,7 +799,7 @@ class radfil(object):
             axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.02))
                        
             #Add labels#
-            axis.text(0.03, 0.95,"m={:.2e}\nb={:.2e}".format(self.bgfit.parameters[0],self.bgfit.parameters[1]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+            axis.text(0.03, 0.95,"m={:.2e}\nb={:.2e}".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
             axis.text(0.85, 0.95,"Background\nFitting", ha='center',va='top', fontsize=20, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
                         
             #Adjust axes limits
