@@ -787,7 +787,7 @@ class radfil(object):
             axis = ax[0]
             axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .1)
             [axis.axvline(_bglineplot, linewidth=1, color='g', ls='dashed') for _bglineplot in [self.bgdist[0],self.bgdist[1],-1*self.bgdist[0],-1*self.bgdist[1]]]
-            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(-1*np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
+            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
             
