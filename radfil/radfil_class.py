@@ -9,6 +9,7 @@ import types
 from scipy.interpolate import splprep
 from scipy.interpolate import splev
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 import astropy.units as u
 import astropy.constants as c
@@ -20,10 +21,10 @@ import shapely.geometry as geometry
 
 from radfil import profile_tools
 from plummer import Plummer1D
+from matplotlib.patches import Rectangle
 
+mpl.rcParams['grid.color'] = 'yellow'
 
-
-#bgoptions={'flat':False,'sloping':True}
 
 
 class radfil(object):
@@ -39,7 +40,11 @@ class radfil(object):
     mask: numpy.ndarray
         A 2D array defining the shape of the filament; must be of boolean
         type and the same shape as the image array
-
+        
+    beamwidth: float
+        A float in units of arcseconds indicating the beamwidth of the image
+        array.  
+        
     header : astropy.io.fits.Header
         The header corresponding to the image array
 
@@ -149,8 +154,6 @@ class radfil(object):
             warnings.warn("The input `filspine` has to be a 2D numpy array. Ignore for now.")
 
 
-
-
         # Pad the edge when padsize is given.
         ## TypeError is dealt with by `numpy.pad`.
         self.padsize = padsize
@@ -191,12 +194,6 @@ class radfil(object):
 
         Parameters:
          ----------
-        beamwidth: float
-            A float in units of arcseconds indicating the beamwidth of the image
-            array.  When corresponding keys are in the header file, the header
-            will be used to determine the beamwidth.  Only when the header does
-            not containt information regarding the beamwidth, is the input
-            `beamwidth` used in the calculation.
 
         verbose: boolean
             A boolean indicating whether you want to enable FilFinder plotting of filament spine
@@ -206,17 +203,16 @@ class radfil(object):
         filspine : numpy.ndarray
            A 2D array of 1s and 0s defining the longest path through the filament mask
         """
-
+        
         # Read beamwidth
         if isinstance(beamwidth, numbers.Number):
             if (self.header is not None):
                 self.beamwidth = beamwidth * u.arcsec
             else:
                 self.beamwidth = beamwidth * u.pix
-
         else:
             self.beamwidth = None
-            raise TypeError("A beamwidth is needed if the header does not contain the beam information.")
+            raise TypeError("A beamwidth is required")
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
@@ -381,7 +377,7 @@ class radfil(object):
                 raise TypeError("samp_int has to be an integer, when cut is True.")
             # Spline calculation:
             ##set the spline parameters
-            k = 5 # spline order ## why 5 when scipy suggested 3?
+            k = 5
             nest = -1 # estimate of number of knots needed (-1 = maximal)
             ## find the knot points
             tckp, up, = splprep([x,y], k = k, nest = -1)
@@ -389,18 +385,20 @@ class radfil(object):
             xspline, yspline = splev(up, tckp)
             xprime, yprime = splev(up, tckp, der=1)
             ## Notice that the result containt points on the spline that are not
-            ## evenly sampled.  This might introduce biase when using a single
+            ## evenly sampled.  This might introduce biases when using a single
             ## number `samp_int`.
 
             ## Plot the results
-            fig=plt.figure(figsize=(5,5))
+            fig=plt.figure(figsize=(8,8))
             ax=plt.gca()
             ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
-            ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.25)
-            ax.set_xlim(-.5, self.mask.shape[1]-.5)
-            ax.set_ylim(-.5, self.mask.shape[0]-.5)
-            self.fig, self.ax = fig, ax
+            ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.5)
+            ax.set_xlim(int(np.min(np.where(self.mask==1)[1]*0.75)),int(np.max(np.where(self.mask==1)[1])*1.25))
+            ax.set_ylim(int(np.min(np.where(self.mask==1)[0]*0.75)),int(np.max(np.where(self.mask==1)[0])*1.25))
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
 
+            self.fig, self.ax = fig, ax
 
             # Only points within pts_mask AND the original mask are used.
             if (self.pts_mask is not None):
@@ -452,14 +450,13 @@ class radfil(object):
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
                                                                              mask = (abs(cut_distance) >= cutdist)))
 
-
             # Return the complete set of cuts. Including those outside `cutdist`.
             self.dictionary_cuts = dictionary_cuts
             ## Plot the peak positions if shift
             if self.shift:
                 self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
                              np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
-                             'b.', markersize = 6.)
+                             'b.', markersize = 10.)
         # if no cutting
         else:
             ## warnings.warn if samp_int exists.
@@ -491,8 +488,10 @@ class radfil(object):
             ax=plt.gca()
             ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
             ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.25)
-            ax.set_xlim(-.5, self.mask.shape[1]-.5)
-            ax.set_ylim(-.5, self.mask.shape[0]-.5)
+            ax.set_xlim(int(np.min(np.where(self.mask==1)[1]*0.75)),int(np.max(np.where(self.mask==1)[1])*1.25))
+            ax.set_ylim(int(np.min(np.where(self.mask==1)[0]*0.75)),int(np.max(np.where(self.mask==1)[0])*1.25))
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
             self.fig, self.ax = fig, ax
 
             # Extract the distances and the heights
@@ -518,7 +517,6 @@ class radfil(object):
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
                                                                     mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             self.dictionary_cuts = dictionary_cuts
-
 
 
         # Stack the result.
@@ -567,7 +565,6 @@ class radfil(object):
             mastery = self.yall
             print "No binning is applied."
 
-
         # Close the figure
         #plt.close()
 
@@ -608,7 +605,7 @@ class radfil(object):
 
         return self
 
-    def fit_profile(self, bgdist = None, fitdist = None, verbose=False, bgdegree = 1):
+    def fit_profile(self, bgdist = None, fitdist = None, fitfunc=None, verbose=False, beamwidth=None, bgdegree = 1):
 
         """
         Fit a model to the filament's master profile
@@ -622,15 +619,19 @@ class radfil(object):
 
         bgdist: tuple-like, with a shape (2,)
             The radial distance range that defines the data points to be used in background subtraction.
-
-            Use np.inf for indefinite boundaries.
-
+            
+        fitfunc: string
+            Options include "Gaussian" or "Plummer"
 
         verbose: boolean,optional (default=False)
             Would you like to display the plots?
 
         bgdegree: integer (default = 1)
             The order of the polynomial used in background subtraction.  Active only when wrap = False.
+            
+        beamwidth: float or int
+            If not inputed into the make_fil_spine method, beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits
+            If not provided, deconvolved FWHM values will be set to nan
 
         Attributes
         ------
@@ -644,11 +645,25 @@ class radfil(object):
         bgfit: astropy.modeling.functional_models (1st-order) or float (0th-order)
             The background removal information.
 
-        profilefit_gaussian, profilefit_plummer: astropy.modeling.functional_models
+        profilefit: astropy.modeling.functional_models
             The fitting results.
 
-
         """
+        
+        #Check to make sure user entered valid function
+        if fitfunc!="Plummer" and fitfunc!="Gaussian":
+            raise ValueError("Reset fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
+            
+        #Check whether beamwidth already exists, or whether they have inputed one here to compute deconvolved FWHM      
+        if (hasattr(self,'beamwith')==False) & (type(beamwidth)!=None):
+            if isinstance(beamwidth, numbers.Number):
+                if (self.header is not None):
+                    self.beamwidth = beamwidth * u.arcsec
+                else:
+                    self.beamwidth = beamwidth * u.pix
+            else:
+                self.beamwidth = None
+
         # Mask for bg removal
         ## take only bgdist, which should be a 2-tuple or 2-list
         if np.asarray(bgdist).shape == (2,):
@@ -669,9 +684,6 @@ class radfil(object):
             self.bgdist = None
             warnings.warn("No background removal will be performed.")
 
-
-
-
         # Mask for fitting
         ## Anything inside `fitdist` pc is used in fitting.
         if isinstance(fitdist, numbers.Number):
@@ -689,8 +701,6 @@ class radfil(object):
                     np.isfinite(self.mastery))
             if sum(mask) == 0.:
                 raise ValueError("Reset fitdist; there is no data inside fitdist.")
-
-
 
         # Fit for the background, and remove
         ## If bgdist (yes, background removal.)
@@ -713,9 +723,9 @@ class radfil(object):
                 xbg, ybg = self.masterx, self.mastery
                 xbg, ybg = xbg[maskbg], ybg[maskbg]
                 self.xbg, self.ybg = xbg, ybg
-                #bg_init = models.Linear1D(intercept = np.mean(self.ybg))
                 bg_init = models.Polynomial1D(degree = bgdegree) ##########
                 fit_bg = fitting.LinearLSQFitter()
+                
                 ## outlier removal; use sigma clipping, set to 3 sigmas
                 fit_bg_or = fitting.FittingWithOutlierRemoval(fit_bg, sigma_clip,
                                                               niter=10, sigma=3.)
@@ -723,9 +733,11 @@ class radfil(object):
                 data_or, bg_or = fit_bg_or(bg_init, self.xbg, self.ybg)
                 self.bgfit = bg_or.copy()
                 self.ybg_filtered = data_or ## a masked array returned by the outlier removal
+                
                 ## Remove bg and prepare for fitting
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit(xfit)
+                
         ## If no bgdist
         else:
             self.bgfit = None
@@ -735,138 +747,94 @@ class radfil(object):
             xfit, yfit = self.masterx[mask], self.mastery[mask]
         self.xfit, self.yfit = xfit, yfit
 
-
-
-        # Fit (both) models
+        # Fit Model
         ## Gaussian model
-        g_init = models.Gaussian1D(amplitude = .8*np.max(self.yfit),
-                                   mean = 0.,
-                                   stddev=np.std(self.xfit),
-                                   fixed = {'mean': True},
-                                   bounds = {'amplitude': (0., np.inf),
+        if fitfunc=="Gaussian":
+            g_init = models.Gaussian1D(amplitude = .8*np.max(self.yfit),
+                                    mean = 0.,
+                                    stddev=np.std(self.xfit),
+                                    fixed = {'mean': True},
+                                    bounds = {'amplitude': (0., np.inf),
                                              'stddev': (0., np.inf)})
-        fit_g = fitting.LevMarLSQFitter()
-        g = fit_g(g_init, self.xfit, self.yfit)
-        self.profilefit_gaussian = g.copy()
-        print '==== Gaussian ===='
-        print 'amplitude: %.3E'%self.profilefit_gaussian.parameters[0]
-        print 'width: %.3f'%self.profilefit_gaussian.parameters[2]
-        ## Plummer model
-        ###### temporary fix by not assigning bounds... ##########
-        #g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
-        #                   powerIndex=2.,
-        #                   flatteningRadius = np.std(self.xfit),
-        #                   bounds = {'amplitude': (0., np.inf),
-        #                             'powerIndex': (0., np.inf),
-        #                             'flatteningRadius': (0., np.inf)})
-        g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
-                           powerIndex=2.,
-                           flatteningRadius = np.std(self.xfit))
-        fit_g = fitting.LevMarLSQFitter()
-        g = fit_g(g_init, self.xfit, self.yfit)
-        self.profilefit_plummer = g.copy()
-        self.profilefit_plummer.parameters[2] = abs(self.profilefit_plummer.parameters[2]) ##########
-        print '==== Plummer-like ===='
-        print 'amplitude: %.3E'%self.profilefit_plummer.parameters[0]
-        print 'p: %.3f'%self.profilefit_plummer.parameters[1]
-        print 'R_flat: %.3f'%self.profilefit_plummer.parameters[2]
+            fit_g = fitting.LevMarLSQFitter()
+            g = fit_g(g_init, self.xfit, self.yfit)
+            self.profilefit = g.copy()
+            print '==== Gaussian ===='
+            print 'amplitude: %.3E'%self.profilefit.parameters[0]
+            print 'width: %.3f'%self.profilefit.parameters[2]
+            
+        elif fitfunc=="Plummer":
+            g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
+                            powerIndex=2.,
+                            flatteningRadius = np.std(self.xfit))
+                            
+            fit_g = fitting.LevMarLSQFitter()
+            g = fit_g(g_init, self.xfit, self.yfit)
+            self.profilefit = g.copy()
+            self.profilefit.parameters[2] = abs(self.profilefit.parameters[2]) #Make sure R_flat always positive
+            print '==== Plummer-like ===='
+            print 'amplitude: %.3E'%self.profilefit.parameters[0]
+            print 'p: %.3f'%self.profilefit.parameters[1]
+            print 'R_flat: %.3f'%self.profilefit.parameters[2]
+            
+        else:
+            raise ValueError("Reset fitfunc; no valid function entered. Options include 'Gaussian' or 'Plummer'")
 
-
-        # Plot results #########################################################
-        fig, ax = plt.subplots(figsize = (7., 5.), ncols = 2, nrows = 2)
-        ## plummer(+bgfit, if bgfit)
-        axis = ax[0, 0]
-        axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .05)
-        ## Plot bins if binned.
-        if self.binning:
-            stepx, stepy = np.zeros(len(self.masterx)*2)*np.nan, np.zeros(len(self.mastery)*2) * np.nan
-            stepx[::2] = self.masterx-.5*np.diff(self.masterx)[0]  ## assuming linear binning
-            stepx[1::2] = self.masterx+.5*np.diff(self.masterx)[0]
-            stepy[::2], stepy[1::2] = self.mastery, self.mastery
-            axis.plot(stepx, stepy, 'k-', alpha = .4)
-        ## Plot bg if bg removed.
-        if np.asarray(self.bgdist).shape == (2,):
-            if self.wrap:
-                axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
-                axis.plot(self.xfit, self.yfit+self.bgfit, 'b.', markersize = 8., alpha = .15)
-                ## Plot the fits (profilefit + bgfit)
-                xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-                axis.plot(xplot, self.bgfit+self.profilefit_plummer(xplot), 'b-', lw = 3., alpha = .6)
-            else:
-                if isinstance(self.ybg_filtered, np.ndarray):
-                    axis.plot(self.xbg, self.ybg_filtered, 'g.', markersize = 8., alpha = .15)
-                else:
-                    axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
-                axis.plot(self.xfit, self.yfit+self.bgfit(self.xfit), 'b.', markersize = 8., alpha = .15)
-                ## Plot the fits (profilefit + bgfit)
-                xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-                axis.plot(xplot, self.bgfit(xplot)+self.profilefit_plummer(xplot), 'b-', lw = 3., alpha = .6)
-
+            
+        ### Plot background fit if bgdist is not none ###
+        if bgdist!=None:
+            fig, ax = plt.subplots(figsize = (8, 8.), ncols = 1, nrows = 2)
+            axis = ax[0]
+            axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .1)
+            [axis.axvline(_bglineplot, linewidth=1, color='g', ls='dashed') for _bglineplot in [self.bgdist[0],self.bgdist[1],-1*self.bgdist[0],-1*self.bgdist[1]]]
+            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(-1*np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
+            axis.set_xticklabels([])
+            axis.tick_params(labelsize=14)
+            
+            xplot = self.xall
+            yplot = self.yall - self.bgfit(xplot)
+            
+            #Mark BG subtraction boundaries#
+            axis.add_patch(Rectangle((self.bgdist[0],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.02))
+            axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.02))
+                       
+            #Add labels#
+            axis.text(0.03, 0.95,"m={:.2e}\nb={:.2e}".format(self.bgfit.parameters[0],self.bgfit.parameters[1]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+            axis.text(0.85, 0.95,"Background\nFitting", ha='center',va='top', fontsize=20, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                        
+            #Adjust axes limits
+            axis.set_xlim(np.min(self.xall), np.max(self.xall))
+            axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
+            
+            axis=ax[1]
 
         else:
-            axis.plot(self.xfit, self.yfit, 'b.', markersize = 8., alpha = .15)
-            ## Plot the fits (profilefit)
-            xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-            axis.plot(xplot, self.profilefit_plummer(xplot), 'b-', lw = 3., alpha = .6)
-        ## Adjust the plot
+            fig, ax = plt.subplots(figsize = (8, 4.), ncols = 1, nrows = 1)
+            axis = ax
+            
+            xplot=self.xall
+            yplot=self.yall
+            
+
+        ## Plot model 
+        axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
+        [axis.axvline(_fitlineplot, linewidth=1, color='b', ls='dashed') for _fitlineplot in [-1*self.fitdist,self.fitdist]]
+        axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
+        axis.add_patch(Rectangle((-1*self.fitdist, axis.get_ylim()[0]),self.fitdist*2, axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="b", alpha=0.02))
+        
+        #Adjust axis limit based on percentiles of data
         axis.set_xlim(np.min(self.xall), np.max(self.xall))
-        #axis.set_yscale('log')
-        axis.set_xticklabels([])
+        axis.set_ylim(np.percentile(yplot,0)-np.abs(0.5*np.percentile(yplot,0)),np.percentile(yplot,99.9)+np.abs(0.25*np.percentile(yplot,99.9)))
+        
+        axis.text(0.03, 0.95,"{}={:.2e}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+        axis.text(0.85, 0.95,"{}\nFitting".format(fitfunc), ha='center',va='top', fontsize=20, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+        axis.tick_params(labelsize=14)
 
-        ## plummer residual
-        axis = ax[0, 1]
-        axis.plot(self.xfit, self.yfit-self.profilefit_plummer(self.xfit), 'b.', markersize = 8., alpha = .3)
-        ## Adjust the plot
-        axis.set_xlim(np.min(self.xall), np.max(self.xall))
-        axis.set_xticklabels([])
-        axis.set_yticklabels([])
-
-        ## gaussian(+bgfit, if bgfit)
-        axis = ax[1, 0]
-        axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .15)
-        ## Plot bins if binned.
-        if self.binning:
-            stepx, stepy = np.zeros(len(self.masterx)*2)*np.nan, np.zeros(len(self.mastery)*2) * np.nan
-            stepx[::2] = self.masterx-.5*np.diff(self.masterx)[0]  ## assuming linear binning
-            stepx[1::2] = self.masterx+.5*np.diff(self.masterx)[0]
-            stepy[::2], stepy[1::2] = self.mastery, self.mastery
-            axis.plot(stepx, stepy, 'k-', alpha = .4)
-        ## Plot bg if bg removed.
-        if np.asarray(self.bgdist).shape == (2,):
-            if self.wrap:
-                axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
-                axis.plot(self.xfit, self.yfit+self.bgfit, 'r.', markersize = 8., alpha = .15)
-                ## Plot the fits (profilefit + bgfit)
-                xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-                axis.plot(xplot, self.bgfit+self.profilefit_gaussian(xplot), 'r-', lw = 3., alpha = .6)
-            else:
-                if isinstance(self.ybg_filtered, np.ndarray):
-                    axis.plot(self.xbg, self.ybg_filtered, 'g.', markersize = 8., alpha = .15)
-                else:
-                    axis.plot(self.xbg, self.ybg, 'g.', markersize = 8., alpha = .15)
-                axis.plot(self.xfit, self.yfit+self.bgfit(self.xfit), 'r.', markersize = 8., alpha = .15)
-                ## Plot the fits (profilefit + bgfit)
-                xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-                axis.plot(xplot, self.bgfit(xplot)+self.profilefit_gaussian(xplot), 'r-', lw = 3., alpha = .6)
-
-        else:
-            axis.plot(self.xfit, self.yfit, 'r.', markersize = 8., alpha = .15)
-            ## Plot the fits (profilefit)
-            xplot = np.linspace(np.min(self.xall), np.max(self.xall), 100)
-            axis.plot(xplot, self.profilefit_gaussian(xplot), 'r-', lw = 3., alpha = .6)
-        ## Adjust the plot
-        axis.set_xlim(np.min(self.xall), np.max(self.xall))
-        #axis.set_yscale('log')
-
-        ## gaussian residual
-        axis = ax[1, 1]
-        axis.plot(self.xfit, self.yfit-self.profilefit_gaussian(self.xfit), 'r.', markersize = 8., alpha = .3)
-        ## Adjust the plot
-        axis.set_xlim(np.min(self.xall), np.max(self.xall))
-        axis.set_yticklabels([])
-
-        # Close the figure
-        #plt.close()
+        #add axis info
+        fig.tight_layout()
+        fig.subplots_adjust(hspace=0)
+        fig.text(0.5, -0.05, "Radial Distance ({})".format(str(self.imgscale.unit)),fontsize=25,ha='center')
+        fig.text(-0.05, 0.5, "Profile Height",fontsize=25,va='center',rotation=90)
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
@@ -876,14 +844,83 @@ class radfil(object):
         # Return a dictionary to store the results
         ## All the fits are `astropy.model` objects.
         results = {'bgfit': self.bgfit,
-                   'profilefit_gaussian': self.profilefit_gaussian,
-                   'profilefit_plummer': self.profilefit_plummer,
+                   'profilefit': self.profilefit,
                    'xbg': self.xbg,
                    'ybg': self.ybg,
                    'xfit': self.xfit,
                    'yfit': self.yfit}
         self._results['fit_profile'] = results
+                           
+        if fitfunc=="Gaussian":
+            FWHM= 2.*np.sqrt(2.*np.log(2.))*self.profilefit.parameters[2]
+            
+            if self.beamwidth!=None:
+                 
+                if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
+                    beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
+                    print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
+                
+                    if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                    else:
+                        FWHM_deconv = np.nan
+                        warnings.warn("The Gaussian width is not resolved.")
+                
+                elif (self.beamwidth.unit == u.pix):
+                    beamwidth_phys = self.beamwidth.value
+                    print 'Beamwidth in the Pixel Unit:', self.beamwidth
+                
+                    if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                    else:
+                        FWHM_deconv = np.nan
+                        warnings.warn("The width is not resolved.")
+                else:
+                    FWHM_deconv = np.nan
+                    warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
+                
+            else:
+                    FWHM_deconv = np.nan
+                    warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
+                
+                
+        if fitfunc=="Plummer":
+        
+            FWHM=2.*self.profilefit.parameters[2]*np.sqrt(2.**(2./(self.profilefit.parameters[1]-1.)) - 1.)
 
+            if self.beamwidth!=None:
+                if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
+                    beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
+                    print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
+                
+                    if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                    else:
+                        FWHM_deconv = np.nan
+                        warnings.warn("The width is not resolved.")
+                
+                elif (self.beamwidth.unit == u.pix):
+                    beamwidth_phys = self.beamwidth.value
+                    print 'Beamwidth in the Pixel Unit:', self.beamwidth
+                
+                    if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                    else:
+                        FWHM_deconv = np.nan
+                        warnings.warn("The width is not resolved.")
+                else:
+                    FWHM_deconv = np.nan
+                    warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")     
+            else:
+                FWHM_deconv = np.nan
+                warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")  
+                        
+        self._results['FWHM'] = FWHM
+        self._results['FWHM_deconv'] = FWHM_deconv
+
+        ###########################
+        #OLD CODE RECORDS (Can delete later)
+        """
         # Return FWHM from both Plummer and Guassian
         FWHM = {'gaussian': 2.*np.sqrt(2.*np.log(2.))*self.profilefit_gaussian.parameters[2],
                 'plummer': 2.*self.profilefit_plummer.parameters[2]*\
@@ -901,6 +938,8 @@ class radfil(object):
             else:
                 FWHM['plummer_deconvolved'] = np.nan
                 warnings.warn("The Plummer width is not resolved.")
+                
+                
         elif (self.beamwidth.unit == u.pix):
             beamwidth_phys = self.beamwidth.value
             print 'Beamwidth in the Pixel Unit:', self.beamwidth
@@ -918,8 +957,8 @@ class radfil(object):
             FWHM['gaussian_deconvolved'] = np.nan
             FWHM['plummer_deconvolved'] = np.nan
             warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
-        self._results['FWHM'] = FWHM
-
+            
+        """    
 
         return self
 
