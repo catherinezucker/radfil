@@ -25,8 +25,6 @@ from matplotlib.patches import Rectangle
 
 mpl.rcParams['grid.color'] = 'yellow'
 
-
-
 class radfil(object):
 
     """
@@ -213,6 +211,7 @@ class radfil(object):
         else:
             self.beamwidth = None
             raise TypeError("A beamwidth is required")
+            
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
@@ -291,7 +290,7 @@ class radfil(object):
             will be a "half profile" with the peak near/at the center (depending on
             whether it's shifted).
 
-        cut: boolean (default = True)
+        make_cut: boolean (default = True)
             Indicates whether to perform cuts when extracting the profile. Since
             the original spine found by `fil_finder_2D` is not likely differentiable
             everywhere, setting `cut = True` necessates a spline fit to smoothe
@@ -377,7 +376,7 @@ class radfil(object):
                 raise TypeError("samp_int has to be an integer, when cut is True.")
             # Spline calculation:
             ##set the spline parameters
-            k = 5
+            k = 3
             nest = -1 # estimate of number of knots needed (-1 = maximal)
             ## find the knot points
             tckp, up, = splprep([x,y], k = k, nest = -1)
@@ -522,19 +521,15 @@ class radfil(object):
         # Stack the result.
         ## xall, yall = np.concatenate(self.dictionary_cuts['distance']), np.concatenate(self.dictionary_cuts['profile'])
         mask_cutdist = np.concatenate([~singlecut.mask for singlecut in self.dictionary_cuts['profile_masked']])
+        self.mask_cutdist=mask_cutdist
         xall, yall = np.concatenate(self.dictionary_cuts['distance'])[mask_cutdist],\
                      np.concatenate(self.dictionary_cuts['profile'])[mask_cutdist]
-        #xall, yall = xall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
-        #                   (xall < (self.cutdist/self.imgscale).decompose().value)],\
-        #             yall[(xall >= (-self.cutdist/self.imgscale).decompose().value)&\
-        #                  (xall < (self.cutdist/self.imgscale).decompose().value)]
+
         ## Store the values.
         self.xall = xall ## in pc
         self.yall = yall
 
         ### the following operations, including binning and fitting, should be done on self.xall and self.yall.
-
-
         # Bin the profiles (if nobins=False) or stack the profiles (if nobins=True)
         ## This step assumes linear binning.
         ## If the input is the number of bins:
@@ -794,18 +789,18 @@ class radfil(object):
             xplot = self.xall
             yplot = self.yall - self.bgfit(xplot)
             
-            #Mark BG subtraction boundaries#
-            axis.add_patch(Rectangle((self.bgdist[0],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.02))
-            axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.02))
-                       
-            #Add labels#
-            axis.text(0.03, 0.95,"m={:.2e}\nb={:.2e}".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-            axis.text(0.85, 0.95,"Background\nFitting", ha='center',va='top', fontsize=20, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-                        
             #Adjust axes limits
             axis.set_xlim(np.min(self.xall), np.max(self.xall))
             axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
             
+            #Mark BG subtraction boundaries#
+            axis.add_patch(Rectangle((self.bgdist[0],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
+            axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
+                       
+            #Add labels#
+            axis.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+            axis.text(0.97, 0.95,"Background\nFit", ha='right',va='top', fontsize=20, fontweight='bold',color='green',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                        
             axis=ax[1]
 
         else:
@@ -820,14 +815,14 @@ class radfil(object):
         axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
         [axis.axvline(_fitlineplot, linewidth=1, color='b', ls='dashed') for _fitlineplot in [-1*self.fitdist,self.fitdist]]
         axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
-        axis.add_patch(Rectangle((-1*self.fitdist, axis.get_ylim()[0]),self.fitdist*2, axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="b", alpha=0.02))
+        axis.add_patch(Rectangle((-1*self.fitdist, axis.get_ylim()[0]),self.fitdist*2, axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="b", alpha=0.05))
         
         #Adjust axis limit based on percentiles of data
         axis.set_xlim(np.min(self.xall), np.max(self.xall))
         axis.set_ylim(np.percentile(yplot,0)-np.abs(0.5*np.percentile(yplot,0)),np.percentile(yplot,99.9)+np.abs(0.25*np.percentile(yplot,99.9)))
         
-        axis.text(0.03, 0.95,"{}={:.2e}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-        axis.text(0.85, 0.95,"{}\nFitting".format(fitfunc), ha='center',va='top', fontsize=20, fontweight='bold',transform=axis.transAxes,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+        axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+        axis.text(0.97, 0.95,"{}\nFit".format(fitfunc), ha='right',va='top', fontsize=20, color='blue',fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
         axis.tick_params(labelsize=14)
 
         #add axis info
