@@ -54,16 +54,6 @@ class radfil(object):
         be of boolean type and the same shape as the img array. Can also create
         your own with the FilFinder package using the "make_fil_spine" method.
 
-    padsize: {sequence, array_like, int}, optional
-        In cases in which the filament is too close to the border of the image,
-        might need to pad in order for RadFil to successfully run.
-
-        This is passed on to `numpy.pad`. Number of values padded to the edges
-        of each axis. ((before_1, after_1), ... (before_N, after_N)) unique pad
-        widths for each axis. ((before, after),) yields same before and after
-        pad for each axis. (pad,) or int is a shortcut for before = after = pad
-        width for all axes.
-
     imgscale: float, optional
         In cases where the header is not in the standrad format, imgscale is
         specified.  This is overwritten when the header and proper header keys
@@ -75,7 +65,7 @@ class radfil(object):
            The image scale in pc of each pixel
     """
 
-    def __init__(self, image, mask, header = None, distance = None, filspine=None, padsize=None, imgscale=None):
+    def __init__(self, image, mask, header = None, distance = None, filspine = None, imgscale = None):
 
         # Read image
         if (isinstance(image, np.ndarray)) and (image.ndim == 2):
@@ -152,32 +142,11 @@ class radfil(object):
             warnings.warn("The input `filspine` has to be a 2D numpy array. Ignore for now.")
 
 
-        # Pad the edge when padsize is given.
-        ## TypeError is dealt with by `numpy.pad`.
-        self.padsize = padsize
-        if (self.padsize is not None):
-            self.image = np.pad(self.image,
-                                self.padsize,
-                                'constant',
-                                constant_values = 0)
-            self.mask = np.pad(self.mask,
-                               self.padsize,
-                               'constant',
-                               constant_values = 0)
-            if (self.filspine is not None):
-                self.filspine=np.pad(self.filspine,
-                                     self.padsize,
-                                     'constant',
-                                     constant_values = 0)
-
-
         # Return a dictionary to store the key setup Parameters
-        ## (all padded)
         params = {'image': self.image,
                   'mask': self.mask,
                   'header': self.header,
                   'distance': self.distance,
-                  'padsize': self.padsize,
                   'imgscale': self.imgscale}
         self._params = {'__init__': params}
 
@@ -185,7 +154,7 @@ class radfil(object):
         self._results = {'make_fil_spine': {'filspine': self.filspine}}
 
 
-    def make_fil_spine(self,beamwidth=None,verbose=False):
+    def make_fil_spine(self,beamwidth = None,verbose = False):
 
         """
         Create filament spine using the FilFinder package 'shortest path' option
@@ -350,15 +319,9 @@ class radfil(object):
             self.samp_int = None
             warnings.warn("samp_int has to be an integer; ignored for now. See documentation.")
 
-        # Read the pts_mask and see if it needs padding
+        # Read the pts_mask
         if isinstance(pts_mask, np.ndarray) and (pts_mask.ndim == 2):
-            if (self.padsize > 0):
-                self.pts_mask = (np.pad(pts_mask,
-                                        self.padsize,
-                                        'constant',
-                                        constant_values = 0)).astype(bool)
-            else:
-                self.pts_mask = pts_mask.astype(bool)
+            self.pts_mask = pts_mask.astype(bool)
         else:
             self.pts_mask = None
 
@@ -567,14 +530,16 @@ class radfil(object):
         self.masterx=masterx
         self.mastery=mastery
 
+
+        ## all are unpadded now.
         #return image, mask, and spine to original image dimensions without padding
-        if self.padsize!=None and self.padsize!=0:
-            self.image=self.image[self.padsize:self.image.shape[0]-self.padsize,self.padsize:self.image.shape[1]-self.padsize]
-            self.mask=self.mask[self.padsize:self.mask.shape[0]-self.padsize,self.padsize:self.mask.shape[1]-self.padsize]
-            self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
+        #if self.padsize!=None and self.padsize!=0:
+        #    self.image=self.image[self.padsize:self.image.shape[0]-self.padsize,self.padsize:self.image.shape[1]-self.padsize]
+        #    self.mask=self.mask[self.padsize:self.mask.shape[0]-self.padsize,self.padsize:self.mask.shape[1]-self.padsize]
+        #    self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
 
         # Return a dictionary to store the key setup Parameters
-        self._params['__init__']['image'] = self.image ## (unpadded)
+        self._params['__init__']['image'] = self.image
         self._params['__init__']['mask'] = self.mask ## This is the intersection between all the masks
         params = {'cutting': self.cutting,
                   'binning': self.binning,
@@ -646,11 +611,14 @@ class radfil(object):
         """
 
         #Check to make sure user entered valid function
-        if fitfunc.lower() != "plummer" and fitfunc.lower() != "gaussian":
-            raise ValueError("Reset fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
+        if isinstance(fitfunc, str):
+            if (fitfunc.lower() == 'plummer') or (fitfunc.lower() == 'gaussian'):
+                self.fitfunc = fitfunc.lower()
+                fitfunc_style = self.fitfunc.capitalize()
+            else:
+                raise ValueError("Reset fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
         else:
-            self.fitfunc = fitfunc.lower()
-            fitfunc_style = self.fitfunc.capitalize()
+            raise ValueError("Set a fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
 
         #Check whether beamwidth already exists, or whether they have inputed one here to compute deconvolved FWHM
         if (hasattr(self,'beamwith')==False) & (type(beamwidth)!=None):
