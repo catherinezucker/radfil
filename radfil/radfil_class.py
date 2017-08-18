@@ -38,11 +38,11 @@ class radfil(object):
     mask: numpy.ndarray
         A 2D array defining the shape of the filament; must be of boolean
         type and the same shape as the image array
-        
+
     beamwidth: float
         A float in units of arcseconds indicating the beamwidth of the image
-        array.  
-        
+        array.
+
     header : astropy.io.fits.Header
         The header corresponding to the image array
 
@@ -201,7 +201,7 @@ class radfil(object):
         filspine : numpy.ndarray
            A 2D array of 1s and 0s defining the longest path through the filament mask
         """
-        
+
         # Read beamwidth
         if isinstance(beamwidth, numbers.Number):
             if (self.header is not None):
@@ -211,7 +211,7 @@ class radfil(object):
         else:
             self.beamwidth = None
             raise TypeError("A beamwidth is required")
-            
+
 
         # fil_finder
         ## Let fil_fineder deal with the beamwidth
@@ -614,7 +614,7 @@ class radfil(object):
 
         bgdist: tuple-like, with a shape (2,)
             The radial distance range that defines the data points to be used in background subtraction.
-            
+
         fitfunc: string
             Options include "Gaussian" or "Plummer"
 
@@ -623,7 +623,7 @@ class radfil(object):
 
         bgdegree: integer (default = 1)
             The order of the polynomial used in background subtraction.  Active only when wrap = False.
-            
+
         beamwidth: float or int
             If not inputed into the make_fil_spine method, beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits
             If not provided, deconvolved FWHM values will be set to nan
@@ -644,12 +644,15 @@ class radfil(object):
             The fitting results.
 
         """
-        
+
         #Check to make sure user entered valid function
-        if fitfunc!="Plummer" and fitfunc!="Gaussian":
+        if fitfunc.lower() != "plummer" and fitfunc.lower() != "gaussian":
             raise ValueError("Reset fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
-            
-        #Check whether beamwidth already exists, or whether they have inputed one here to compute deconvolved FWHM      
+        else:
+            self.fitfunc = fitfunc.lower()
+            fitfunc_style = self.fitfunc.capitalize()
+
+        #Check whether beamwidth already exists, or whether they have inputed one here to compute deconvolved FWHM
         if (hasattr(self,'beamwith')==False) & (type(beamwidth)!=None):
             if isinstance(beamwidth, numbers.Number):
                 if (self.header is not None):
@@ -720,7 +723,7 @@ class radfil(object):
                 self.xbg, self.ybg = xbg, ybg
                 bg_init = models.Polynomial1D(degree = bgdegree) ##########
                 fit_bg = fitting.LinearLSQFitter()
-                
+
                 ## outlier removal; use sigma clipping, set to 3 sigmas
                 fit_bg_or = fitting.FittingWithOutlierRemoval(fit_bg, sigma_clip,
                                                               niter=10, sigma=3.)
@@ -728,11 +731,11 @@ class radfil(object):
                 data_or, bg_or = fit_bg_or(bg_init, self.xbg, self.ybg)
                 self.bgfit = bg_or.copy()
                 self.ybg_filtered = data_or ## a masked array returned by the outlier removal
-                
+
                 ## Remove bg and prepare for fitting
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit(xfit)
-                
+
         ## If no bgdist
         else:
             self.bgfit = None
@@ -744,7 +747,7 @@ class radfil(object):
 
         # Fit Model
         ## Gaussian model
-        if fitfunc=="Gaussian":
+        if self.fitfunc == "gaussian":
             g_init = models.Gaussian1D(amplitude = .8*np.max(self.yfit),
                                     mean = 0.,
                                     stddev=np.std(self.xfit),
@@ -757,12 +760,12 @@ class radfil(object):
             print '==== Gaussian ===='
             print 'amplitude: %.3E'%self.profilefit.parameters[0]
             print 'width: %.3f'%self.profilefit.parameters[2]
-            
-        elif fitfunc=="Plummer":
+        ## Plummer-like model
+        elif self.fitfunc == "plummer":
             g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
                             powerIndex=2.,
                             flatteningRadius = np.std(self.xfit))
-                            
+
             fit_g = fitting.LevMarLSQFitter()
             g = fit_g(g_init, self.xfit, self.yfit)
             self.profilefit = g.copy()
@@ -771,13 +774,13 @@ class radfil(object):
             print 'amplitude: %.3E'%self.profilefit.parameters[0]
             print 'p: %.3f'%self.profilefit.parameters[1]
             print 'R_flat: %.3f'%self.profilefit.parameters[2]
-            
+
         else:
             raise ValueError("Reset fitfunc; no valid function entered. Options include 'Gaussian' or 'Plummer'")
 
-            
+
         ### Plot background fit if bgdist is not none ###
-        if bgdist!=None:
+        if self.bgdist != None:
             fig, ax = plt.subplots(figsize = (8, 8.), ncols = 1, nrows = 2)
             axis = ax[0]
             axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .1)
@@ -785,44 +788,44 @@ class radfil(object):
             axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
-            
+
             xplot = self.xall
             yplot = self.yall - self.bgfit(xplot)
-            
+
             #Adjust axes limits
             axis.set_xlim(np.min(self.xall), np.max(self.xall))
             axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
-            
+
             #Mark BG subtraction boundaries#
             axis.add_patch(Rectangle((self.bgdist[0],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
             axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
-                       
+
             #Add labels#
             axis.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
             axis.text(0.97, 0.95,"Background\nFit", ha='right',va='top', fontsize=20, fontweight='bold',color='green',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-                        
+
             axis=ax[1]
 
         else:
             fig, ax = plt.subplots(figsize = (8, 4.), ncols = 1, nrows = 1)
             axis = ax
-            
+
             xplot=self.xall
             yplot=self.yall
-            
 
-        ## Plot model 
+
+        ## Plot model
         axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
         [axis.axvline(_fitlineplot, linewidth=1, color='b', ls='dashed') for _fitlineplot in [-1*self.fitdist,self.fitdist]]
         axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
         axis.add_patch(Rectangle((-1*self.fitdist, axis.get_ylim()[0]),self.fitdist*2, axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="b", alpha=0.05))
-        
+
         #Adjust axis limit based on percentiles of data
         axis.set_xlim(np.min(self.xall), np.max(self.xall))
         axis.set_ylim(np.percentile(yplot,0)-np.abs(0.5*np.percentile(yplot,0)),np.percentile(yplot,99.9)+np.abs(0.25*np.percentile(yplot,99.9)))
-        
+
         axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-        axis.text(0.97, 0.95,"{}\nFit".format(fitfunc), ha='right',va='top', fontsize=20, color='blue',fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+        axis.text(0.97, 0.95,"{}\nFit".format(fitfunc_style), ha='right',va='top', fontsize=20, color='blue',fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
         axis.tick_params(labelsize=14)
 
         #add axis info
@@ -833,7 +836,8 @@ class radfil(object):
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
-                  'fitdist': self.fitdist}
+                  'fitdist': self.fitdist,
+                  'fitfunc': self.fitfunc}
         self._params['fit_profile'] = params
 
         # Return a dictionary to store the results
@@ -845,26 +849,26 @@ class radfil(object):
                    'xfit': self.xfit,
                    'yfit': self.yfit}
         self._results['fit_profile'] = results
-                           
-        if fitfunc=="Gaussian":
-            FWHM= 2.*np.sqrt(2.*np.log(2.))*self.profilefit.parameters[2]
-            
+
+        if self.fitfunc == "gaussian":
+            FWHM = 2.*np.sqrt(2.*np.log(2.))*self.profilefit.parameters[2]
+
             if self.beamwidth!=None:
-                 
+
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
                     print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
-                
+
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
                     else:
                         FWHM_deconv = np.nan
                         warnings.warn("The Gaussian width is not resolved.")
-                
+
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
                     print 'Beamwidth in the Pixel Unit:', self.beamwidth
-                
+
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
                     else:
@@ -873,31 +877,31 @@ class radfil(object):
                 else:
                     FWHM_deconv = np.nan
                     warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
-                
+
             else:
                     FWHM_deconv = np.nan
                     warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
-                
-                
-        if fitfunc=="Plummer":
-        
-            FWHM=2.*self.profilefit.parameters[2]*np.sqrt(2.**(2./(self.profilefit.parameters[1]-1.)) - 1.)
+
+
+        if self.fitfunc == "plummer":
+
+            FWHM = 2.*self.profilefit.parameters[2]*np.sqrt(2.**(2./(self.profilefit.parameters[1]-1.)) - 1.)
 
             if self.beamwidth!=None:
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
                     print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
-                
+
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
                     else:
                         FWHM_deconv = np.nan
                         warnings.warn("The width is not resolved.")
-                
+
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
                     print 'Beamwidth in the Pixel Unit:', self.beamwidth
-                
+
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
                     else:
@@ -905,11 +909,12 @@ class radfil(object):
                         warnings.warn("The width is not resolved.")
                 else:
                     FWHM_deconv = np.nan
-                    warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")     
+                    warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
             else:
                 FWHM_deconv = np.nan
-                warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")  
-                        
+                warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
+
+        self.FWHM, self.FWHM_deconv = FWHM, FWHM_deconv
         self._results['FWHM'] = FWHM
         self._results['FWHM_deconv'] = FWHM_deconv
 
@@ -933,8 +938,8 @@ class radfil(object):
             else:
                 FWHM['plummer_deconvolved'] = np.nan
                 warnings.warn("The Plummer width is not resolved.")
-                
-                
+
+
         elif (self.beamwidth.unit == u.pix):
             beamwidth_phys = self.beamwidth.value
             print 'Beamwidth in the Pixel Unit:', self.beamwidth
@@ -952,8 +957,8 @@ class radfil(object):
             FWHM['gaussian_deconvolved'] = np.nan
             FWHM['plummer_deconvolved'] = np.nan
             warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
-            
-        """    
+
+        """
 
         return self
 
