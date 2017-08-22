@@ -52,6 +52,10 @@ def curveorder(x,y):
     xx = x[opt_order]
     yy = y[opt_order]
 
+    if yy[-1] < yy[0]:
+        yy = yy[::-1]
+        xx = xx[::-1]
+
     return(xx,yy)
 
 
@@ -134,65 +138,62 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
 
     # Sort the points to find the center of each segment inside a single pixel.
     ## This also deals with when the cut crosses at the 4-corner point(s).
+    ## The sorting is done by sorting the x coordinates
     stack = sorted(list(set(zip(np.concatenate([edgex, x_edgey]),\
                        np.concatenate([y_edgex, edgey])))))
     centers =  stack[:-1]+.5*np.diff(stack, axis = 0)
 
-    # Make the mask for pixels that the cut passes through.
-    line_mask = np.zeros(image.shape, dtype = bool)
-    line_mask[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)] = True
-
-    # Create the final mask; find the region where the initial point is at and
-    # exclude regions that are not connected. (For a very curved spine.)
-    ##### This was used, which finds only the cuts within the orginal mask that was used to find the spine.
-    ##
-    final_mask0 = (line_mask*mask)
-    final_mask0 = (morphology.label(final_mask0) == morphology.label(final_mask0)[int(round(y0)), int(round(x0))])
-    ##
-    final_mask = line_mask#*np.ones(mask.shape, dtype = bool)
-    final_mask = (morphology.label(final_mask) == morphology.label(final_mask)[int(round(y0)), int(round(x0))])
+    ## extract the values from the image and the original mask
+    image_line = image[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)]
+    mask_line = mask[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)]
+    #### select the part of the mask that includes the original point
+    mask_p0 = (np.round(centers[:, 0]).astype(int) == int(round(x0)))&\
+              (np.round(centers[:, 1]).astype(int) == int(round(y0)))
+    mask_line = (morphology.label(mask_line) == morphology.label(mask_line)[mask_p0])
 
     # Extract the profile from the image.
-    ##
-    final_idx0 = sorted(zip(np.where(final_mask0)[1], np.where(final_mask0)[0]))
-    #image_line0 = image[np.asarray(final_idx0)[:, 1], np.asarray(final_idx0)[:, 0]]
-    if (derivative[0]*derivative[1] >= 0.):
-        image_line0 = image[final_mask0][::-1]
-    elif derivative[0]*derivative[1] < 0:
-        image_line0 = image[final_mask0]
-    ##
-    final_idx = sorted(zip(np.where(final_mask)[1], np.where(final_mask)[0]))
-    #image_line = image[np.asarray(final_idx)[:, 1], np.asarray(final_idx)[:, 0]]
-    if (derivative[0]*derivative[1] >= 0.):
-        image_line = image[final_mask][::-1]
-    elif derivative[0]*derivative[1] < 0:
-        image_line = image[final_mask]
+    ## for the points within the original mask; to find the peak
+    if derivative[1] < 0.:
+        image_line0 = image_line[mask_line][::-1]
+        centers = centers[::-1]
+        mask_line = mask_line[::-1]
+        mask_p0 = mask_p0[::-1]
+    else:
+        image_line0 = image_line[mask_line]
+    ## for the entire map
+    if derivative[1] < 0.:
+        image_line = image_line[::-1]
+    else:
+        image_line = image_line
 
     # Plot.
-    peak_finder = [t for t in centers if (round(t[0]), round(t[1])) in final_idx0]
+    peak_finder = centers[mask_line]
+    ## find the end points of the cuts (within the original mask)
     start, end = peak_finder[0], peak_finder[-1]
-    xpeak, ypeak = np.asarray(peak_finder)[image_line0 == np.nanmax(image_line0)][0]
+    ## find the peak here
+    xpeak, ypeak = peak_finder[image_line0 == np.nanmax(image_line0)][0]
+    ## the peak mask is used to determine where to unwrap when shift = True
+    mask_peak = (np.round(centers[:, 0]).astype(int) == int(round(xpeak)))&\
+                (np.round(centers[:, 1]).astype(int) == int(round(ypeak)))
+    ## plot the cut
     axis.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth = 1.)
 
     # Shift.
     if shift:
-        #xpeak, ypeak = np.asarray(peak_finder)[image_line == np.max(image_line)][0]
-        #axis.plot(xpeak, ypeak, 'b.', markersize = 6.)
-        final_dist = np.asarray([np.sqrt((t[0]-xpeak)**2.+(t[1]-ypeak)**2.) for t in centers\
-                  if (round(t[0]), round(t[1])) in final_idx])
-
+        final_dist = np.hypot(centers[:, 0]-xpeak, centers[:, 1]-ypeak)
+        # unwrap
+        pos0 = np.where(mask_peak)[0][0]
+        final_dist[:pos0] = -final_dist[:pos0]
     else:
-        final_dist = np.asarray([np.sqrt((t[0]-x0)**2.+(t[1]-y0)**2.) for t in centers\
-                      if (round(t[0]), round(t[1])) in final_idx])
+        final_dist = np.hypot(centers[:, 0]-x0, centers[:, 1]-y0)
+        # unwrap
+        pos0 = np.where(mask_p0)[0][0]
+        final_dist[:pos0] = -final_dist[:pos0]
 
 
-    # Unwrap
-    if (not wrap):
-            pos0 = np.where(final_dist == np.min(final_dist))[0][0]
-            if (derivative[1] > 0.):
-                final_dist[:pos0] = -final_dist[:pos0]
-            elif (derivative[1] < 0.):
-                final_dist[(pos0+1):] = -final_dist[(pos0+1):]
+    # Wrap
+    if wrap:
+            final_dist = abs(final_dist)
 
 
 
