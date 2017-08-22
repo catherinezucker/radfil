@@ -33,11 +33,6 @@ def curveorder(x,y):
 
     T = nx.from_scipy_sparse_matrix(G)
 
-    order = list(nx.dfs_preorder_nodes(T, 0))
-
-    xx = x[order]
-    yy = y[order]
-
     paths = [list(nx.dfs_preorder_nodes(T, i)) for i in range(len(pts))]
 
     mindist = np.inf

@@ -6,8 +6,7 @@ import numbers
 import math
 from collections import defaultdict
 import types
-from scipy.interpolate import splprep
-from scipy.interpolate import splev
+from scipy.interpolate import splprep, splev
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
