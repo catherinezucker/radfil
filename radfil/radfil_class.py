@@ -17,6 +17,7 @@ from astropy.stats import sigma_clip
 from astropy.io import fits
 from fil_finder import fil_finder_2D
 import shapely.geometry as geometry
+import matplotlib.colors as colors
 
 from radfil import profile_tools
 from plummer import Plummer1D
@@ -349,13 +350,25 @@ class radfil(object):
             ## evenly sampled.  This might introduce biases when using a single
             ## number `samp_int`.
 
-            ## Plot the results
+            ## Plot the results ##########
+            ## prepare
+            vmin, vmax = np.min(self.image[self.mask]), np.percentile(self.image[self.mask], 98.)
+            xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
+            ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
+            ## plot
             fig=plt.figure(figsize=(8,8))
             ax=plt.gca()
-            ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
+            ax.imshow(self.image,
+                      origin='lower',
+                      cmap='gray',
+                      interpolation='none',
+                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+            ax.contourf(self.mask,
+                        levels = [0., .5],
+                        colors = 'w')
             ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.5)
-            ax.set_xlim(int(np.min(np.where(self.mask==1)[1]*0.75)),int(np.max(np.where(self.mask==1)[1])*1.25))
-            ax.set_ylim(int(np.min(np.where(self.mask==1)[0]*0.75)),int(np.max(np.where(self.mask==1)[0])*1.25))
+            ax.set_xlim(max(0., xmin-.1*(xmax-xmin)), min(self.mask.shape[1]-.5, xmax+.1*(xmax-xmin)))
+            ax.set_ylim(max(0., ymin-.1*(ymax-ymin)), min(self.mask.shape[0]-.5, ymax+.1*(ymax-ymin)))
             ax.set_xticklabels([])
             ax.set_yticklabels([])
 
@@ -444,13 +457,25 @@ class radfil(object):
             line = geometry.LineString(self.points)
             self.xspline, self.yspline, self.fprime = None, None, None
 
-            ## Plot the results
-            fig=plt.figure(figsize=(5,5))
+            ## Plot the results #####
+            ## prepare
+            vmin, vmax = np.min(self.image[self.mask]), np.percentile(self.image[self.mask], 98.)
+            xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
+            ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
+            ## plot
+            fig=plt.figure(figsize=(8, 8))
             ax=plt.gca()
-            ax.imshow(self.mask, origin='lower', cmap='binary_r', interpolation='none')
+            ax.imshow(self.image,
+                      origin='lower',
+                      cmap='gray',
+                      interpolation='none',
+                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+            ax.contourf(self.mask,
+                        levels = [0., .5],
+                        colors = 'w')
             ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.25)
-            ax.set_xlim(int(np.min(np.where(self.mask==1)[1]*0.75)),int(np.max(np.where(self.mask==1)[1])*1.25))
-            ax.set_ylim(int(np.min(np.where(self.mask==1)[0]*0.75)),int(np.max(np.where(self.mask==1)[0])*1.25))
+            ax.set_xlim(max(0., xmin-.1*(xmax-xmin)), min(self.mask.shape[1]-.5, xmax+.1*(xmax-xmin)))
+            ax.set_ylim(max(0., ymin-.1*(ymax-ymin)), min(self.mask.shape[0]-.5, ymax+.1*(ymax-ymin)))
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             self.fig, self.ax = fig, ax
@@ -747,11 +772,33 @@ class radfil(object):
 
 
         ### Plot background fit if bgdist is not none ###
-        if self.bgdist != None:
+        if self.bgdist is not None:
             fig, ax = plt.subplots(figsize = (8, 8.), ncols = 1, nrows = 2)
             axis = ax[0]
+
+            #Adjust axes limits
+            axis.set_xlim(np.min(self.xall), np.max(self.xall))
+            axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
+
             axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .1)
-            [axis.axvline(_bglineplot, linewidth=1, color='g', ls='dashed') for _bglineplot in [self.bgdist[0],self.bgdist[1],-1*self.bgdist[0],-1*self.bgdist[1]]]
+
+            ##########
+            if self.binning:
+                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery, self.mastery))
+                axis.plot(plotbinx, plotbiny,
+                          'r-')
+
+            # Plot the range
+            axis.fill_between(self.bgdist, *axis.get_ylim(),
+                              facecolor = (0., 1., 0., .05),
+                              edgecolor = 'g',
+                              linestyle = '--',
+                              linewidth = 1.)
+            axis.fill_between(-self.bgdist, *axis.get_ylim(),
+                              facecolor = (0., 1., 0., .05),
+                              edgecolor = 'g',
+                              linestyle = '--',
+                              linewidth = 1.)
             axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
@@ -759,13 +806,6 @@ class radfil(object):
             xplot = self.xall
             yplot = self.yall - self.bgfit(xplot)
 
-            #Adjust axes limits
-            axis.set_xlim(np.min(self.xall), np.max(self.xall))
-            axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
-
-            #Mark BG subtraction boundaries#
-            axis.add_patch(Rectangle((self.bgdist[0],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
-            axis.add_patch(Rectangle((-1*self.bgdist[1],axis.get_ylim()[0]),np.abs(self.bgdist[1]-self.bgdist[0]), axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="green",alpha=0.05))
 
             #Add labels#
             axis.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
@@ -782,14 +822,29 @@ class radfil(object):
 
 
         ## Plot model
-        axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
-        [axis.axvline(_fitlineplot, linewidth=1, color='b', ls='dashed') for _fitlineplot in [-1*self.fitdist,self.fitdist]]
-        axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
-        axis.add_patch(Rectangle((-1*self.fitdist, axis.get_ylim()[0]),self.fitdist*2, axis.get_ylim()[1]-axis.get_ylim()[0], facecolor="b", alpha=0.05))
-
         #Adjust axis limit based on percentiles of data
         axis.set_xlim(np.min(self.xall), np.max(self.xall))
         axis.set_ylim(np.percentile(yplot,0)-np.abs(0.5*np.percentile(yplot,0)),np.percentile(yplot,99.9)+np.abs(0.25*np.percentile(yplot,99.9)))
+
+
+        axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
+        if self.binning:
+            if self.bgdist is not None:
+                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery-self.bgfit(self.masterx), self.mastery-self.bgfit(self.masterx)))
+            else:
+                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery, self.mastery))
+            axis.plot(plotbinx, plotbiny,
+                      'r-')
+
+        # Plot the range
+        axis.fill_between([-self.fitdist, self.fitdist], *axis.get_ylim(),
+                          facecolor = (0., 0., 1., .05),
+                          edgecolor = 'b',
+                          linestyle = '--',
+                          linewidth = 1.)
+        axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
+
+
 
         axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
         axis.text(0.97, 0.95,"{}\nFit".format(fitfunc_style), ha='right',va='top', fontsize=20, color='blue',fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
@@ -820,7 +875,7 @@ class radfil(object):
         if self.fitfunc == "gaussian":
             FWHM = 2.*np.sqrt(2.*np.log(2.))*self.profilefit.parameters[2]
 
-            if self.beamwidth!=None:
+            if self.beamwidth is not None:
 
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
@@ -854,7 +909,7 @@ class radfil(object):
 
             FWHM = 2.*self.profilefit.parameters[2]*np.sqrt(2.**(2./(self.profilefit.parameters[1]-1.)) - 1.)
 
-            if self.beamwidth!=None:
+            if self.beamwidth is not None:
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
                     print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
