@@ -23,7 +23,7 @@ from radfil import profile_tools
 from plummer import Plummer1D
 from matplotlib.patches import Rectangle
 
-mpl.rcParams['grid.color'] = 'yellow'
+import styles
 
 class radfil(object):
 
