@@ -598,8 +598,12 @@ class radfil(object):
         ------
         self: An instance of the radfil_class
 
-        fitdist: number-like
+        fitdist: number-like or tuple-like with a length of 2
             The radial distance (in units of pc) out to which you'd like to fit your profile.
+
+            When the input has a length of 2, data points with distances between the two values will be
+            used in the fitting.  The negative direction is always to the left of the spline direction,
+            which always runs from smaller axis-0 indices to larger axis-0 indices.
 
         bgdist: tuple-like, with a shape (2,)
             The radial distance range that defines the data points to be used in background subtraction.
@@ -680,6 +684,13 @@ class radfil(object):
             self.fitdist = fitdist
             mask = ((self.masterx >= (-self.fitdist))&\
                     (self.masterx < self.fitdist)&\
+                    np.isfinite(self.mastery))
+            if sum(mask) == 0.:
+                raise ValueError("Reset fitdist; there is no data inside fitdist.")
+        elif np.asarray(fitdist).shape == (2,):
+            self.fitdist = np.sort(fitdist)
+            mask = ((self.masterx >= self.fitdist[0])&\
+                    (self.masterx < self.fitdist[1])&\
                     np.isfinite(self.mastery))
             if sum(mask) == 0.:
                 raise ValueError("Reset fitdist; there is no data inside fitdist.")
@@ -837,11 +848,32 @@ class radfil(object):
                       'r-')
 
         # Plot the range
-        axis.fill_between([-self.fitdist, self.fitdist], *axis.get_ylim(),
-                          facecolor = (0., 0., 1., .05),
-                          edgecolor = 'b',
-                          linestyle = '--',
-                          linewidth = 1.)
+        if self.fitdist is not None:
+            ## symmetric fitting range
+            if isinstance(self.fitdist, numbers.Number):
+                axis.fill_between([-self.fitdist, self.fitdist], *axis.get_ylim(),
+                                  facecolor = (0., 0., 1., .05),
+                                  edgecolor = 'b',
+                                  linestyle = '--',
+                                  linewidth = 1.)
+            ## asymmetric fitting range
+            elif np.asarray(self.fitdist).shape == (2,):
+                plot_fitdist = self.fitdist.copy()
+                plot_fitdist[~np.isfinite(plot_fitdist)] = np.asarray(axis.get_xlim())[~np.isfinite(plot_fitdist)]
+                axis.fill_between(plot_fitdist, *axis.get_ylim(),
+                                  facecolor = (0., 0., 1., .05),
+                                  edgecolor = 'b',
+                                  linestyle = '--',
+                                  linewidth = 1.)
+        ## no fitting range; all data are used
+        else:
+            axis.fill_between(axis.get_xlim(), *axis.get_ylim(),
+                              facecolor = (0., 0., 1., .05),
+                              edgecolor = 'b',
+                              linestyle = '--',
+                              linewidth = 1.)
+
+        # Plot the predicted curve
         axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
 
 
