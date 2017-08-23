@@ -457,6 +457,15 @@ class radfil(object):
             line = geometry.LineString(self.points)
             self.xspline, self.yspline, self.fprime = None, None, None
 
+            # Make the mask to use for cutdist selection
+            ## (masking out the pixels that are closest to the head or the tail)
+            xspine, yspine = self.xbeforespline, self.ybeforespline
+            xgrid, ygrid = np.meshgrid(np.arange(self.filspine.shape[1]), np.arange(self.filspine.shape[0]))
+            agrid = np.argmin(np.array([np.hypot(xgrid-xspine[i], ygrid-yspine[i]) for i in range(len(xspine))]),
+                              axis = 0)
+            mask_agrid = (agrid != agrid.max()) & (agrid != 0)
+            ## filtering using the cutdist is done when outputing
+
             ## Plot the results #####
             ## prepare
             vmin, vmax = np.min(self.image[self.mask]), np.percentile(self.image[self.mask], 98.)
@@ -483,8 +492,8 @@ class radfil(object):
             # Extract the distances and the heights
             dictionary_cuts = {}
             if (self.imgscale.unit == u.pc):
-                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pc).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
-                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pc).value for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
+                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
                 dictionary_cuts['plot_peaks'] = None
                 dictionary_cuts['plot_cuts'] = None
 
@@ -493,8 +502,8 @@ class radfil(object):
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
                                                                     mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             elif (self.imgscale.unit == u.pix):
-                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pix).value for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
-                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(self.mask)[1], np.where(self.mask)[0])]]
+                dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pix).value for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
+                dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
                 dictionary_cuts['plot_peaks'] = None
                 dictionary_cuts['plot_cuts'] = None
 
