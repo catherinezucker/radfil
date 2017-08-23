@@ -438,7 +438,7 @@ class radfil(object):
                 self.samp_int = None
                 warnings.warn("samp_int is not used. cut is False.")
             ## warnings.warn if shift and/or wrap is True.
-            if (self.shift or self.wrap):
+            if (self.shift or (not self.wrap)):
                 warnings.warn("shift and/or wrap are not used. cut is False.")
                 self.shift, self.wrap = False, True
 
@@ -809,12 +809,14 @@ class radfil(object):
                           'r-')
 
             # Plot the range
-            axis.fill_between(self.bgdist, *axis.get_ylim(),
+            plot_bgdist = self.bgdist.copy()
+            plot_bgdist[~np.isfinite(plot_bgdist)] = np.asarray(axis.get_xlim())[~np.isfinite(plot_bgdist)]
+            axis.fill_between(plot_bgdist, *axis.get_ylim(),
                               facecolor = (0., 1., 0., .05),
                               edgecolor = 'g',
                               linestyle = '--',
                               linewidth = 1.)
-            axis.fill_between(-self.bgdist, *axis.get_ylim(),
+            axis.fill_between(-plot_bgdist, *axis.get_ylim(),
                               facecolor = (0., 1., 0., .05),
                               edgecolor = 'g',
                               linestyle = '--',
