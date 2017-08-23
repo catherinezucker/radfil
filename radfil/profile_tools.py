@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import math
 from scipy.interpolate import interp1d
 
+from scipy.spatial import distance
+
 
 def curveorder(x,y):
     """
@@ -25,33 +27,34 @@ def curveorder(x,y):
 
     """
 
+    # make the point list (N x 2)
     pts=np.vstack((x,y)).T
 
+    # initiate the NN2 and the network graph
     clf = NearestNeighbors(2).fit(pts)
     G = clf.kneighbors_graph()
-
-
     T = nx.from_scipy_sparse_matrix(G)
 
+    # candidate paths based on the network graph
     paths = [list(nx.dfs_preorder_nodes(T, i)) for i in range(len(pts))]
-
-    mindist = np.inf
-    minidx = 0
-
-    for i in range(len(pts)):
-        p = paths[i]           # order of nodes
-        ordered = pts[p]    # ordered nodes
-        # find cost of that order by the sum of euclidean distances between points (i) and (i+1)
-        cost = (((ordered[:-1] - ordered[1:])**2).sum(1)).sum()
-        if cost < mindist:
-            mindist = cost
-            minidx = i
-
+    ## find the path with the lowest cost (distance) among the candidates
+    minidx = np.argmin([np.sum(np.diagonal(distance.cdist(pts[path], pts[path]), offset = 1)) for path in paths])
     opt_order = paths[minidx]
+    ## permute the head and the tail to find the correct order
+    ### permutation
+    opt_order_swaphead = list(opt_order)
+    opt_order_swaphead[0], opt_order_swaphead[1] = opt_order_swaphead[1], opt_order_swaphead[0]
+    opt_order_swaptail = list(opt_order)
+    opt_order_swaptail[-1], opt_order_swaptail[-2] = opt_order_swaptail[-2], opt_order_swaptail[-1]
+    ### find the correct order among the original and the two permuted
+    paths_opt = [opt_order, opt_order_swaphead, opt_order_swaptail]
+    minidx_opt = np.argmin([np.sum(np.diagonal(distance.cdist(pts[path], pts[path]), offset = 1)) for path in paths_opt])
+    opt_order_final = paths_opt[minidx_opt]
 
-    xx = x[opt_order]
-    yy = y[opt_order]
-
+    # return the ordered coordinates
+    xx = x[opt_order_final]
+    yy = y[opt_order_final]
+    ## make it always go in the increasing y direction
     if yy[-1] < yy[0]:
         yy = yy[::-1]
         xx = xx[::-1]
