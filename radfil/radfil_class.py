@@ -133,7 +133,7 @@ class radfil(object):
             ##
             # When there is not `filspine` in the input.
             else:
-                self.fispine = None
+                self.filspine = None
                 self.imgscale = None
 
         else:
