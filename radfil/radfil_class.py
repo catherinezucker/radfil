@@ -721,11 +721,12 @@ class radfil(object):
                 xbg, ybg = self.masterx, self.mastery
                 xbg, ybg = xbg[maskbg], ybg[maskbg]
                 self.xbg, self.ybg = xbg, ybg
-                self.bgfit = np.median(self.ybg) ### No fitting!
+                self.bgfit = models.Polynomial1D(degree = 0,
+                                                 c0 = np.median(self.ybg)) ### No fitting!
                 self.ybg_filtered = None ## no filtering during background removal
                 ## Remove bg without fitting (or essentially a constant fit).
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
-                yfit = yfit - self.bgfit
+                yfit = yfit - self.bgfit(xfit) ##########
                 print "The profile is wrapped. Use the 0th order polynomial in BG subtraction."
             ## A first-order bg removal is carried out only when the profile is not wrapped.
             else:
@@ -821,7 +822,7 @@ class radfil(object):
                               edgecolor = 'g',
                               linestyle = '--',
                               linewidth = 1.)
-            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), np.linspace(np.min(self.xall),np.max(self.xall),100)*self.bgfit.parameters[1]+self.bgfit.parameters[0],'g-', lw=3)
+            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), self.bgfit(np.linspace(self.xall.min(), self.xall.max(), 100)),'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
 
@@ -830,7 +831,12 @@ class radfil(object):
 
 
             #Add labels#
-            axis.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+            if self.bgfit.degree == 1:
+                axis.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.bgfit.parameters[1],self.bgfit.parameters[0]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+            elif self.bgfit.degree == 0:
+                axis.text(0.03, 0.95,"y=({:.2E})".format(self.bgfit.c0.value),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)
+            else:
+                warnings.warn("Labeling BG functions of higher degrees during plotting are not supported yet.")
             axis.text(0.97, 0.95,"Background\nFit", ha='right',va='top', fontsize=20, fontweight='bold',color='green',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
 
             axis=ax[1]
