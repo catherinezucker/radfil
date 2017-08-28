@@ -406,6 +406,7 @@ class radfil(object):
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length*self.imgscale.value)
                     ##
                     if isinstance(cutdist, numbers.Number):
+                        self.cutdist = cutdist*self.imgscale.unit
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
                                                                              mask = (abs(cut_distance) >= cutdist)))
             elif (self.imgscale.unit == u.pix):
@@ -421,6 +422,7 @@ class radfil(object):
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
                     ##
                     if isinstance(cutdist, numbers.Number):
+                        self.cutdist = cutdist*self.imgscale.unit
                         dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
                                                                              mask = (abs(cut_distance) >= cutdist)))
 
@@ -499,6 +501,7 @@ class radfil(object):
 
                 ##
                 if isinstance(cutdist, numbers.Number):
+                    self.cutdist = cutdist*self.imgscale.unit
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
                                                                     mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             elif (self.imgscale.unit == u.pix):
@@ -509,6 +512,7 @@ class radfil(object):
 
                 ##
                 if isinstance(cutdist, numbers.Number):
+                    self.cutdist = cutdist*self.imgscale.unit
                     dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
                                                                     mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             self.dictionary_cuts = dictionary_cuts
@@ -580,7 +584,7 @@ class radfil(object):
                   'wrap': self.wrap,
                   'bins': self.bins,
                   'samp_int': self.samp_int,
-                  'cutdist': cutdist}
+                  'cutdist': self.cutdist}
         self._params['build_profile'] = params
 
         # Return a dictionary to store the results
