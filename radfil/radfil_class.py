@@ -741,6 +741,11 @@ class radfil(object):
                 ## Remove bg without fitting (or essentially a constant fit).
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit(xfit) ##########
+                ## pass nobs to fitter; masked
+                if self.binning:
+                    self.nobsfit = self.masternobs[mask]
+                else:
+                    self.nobsfit = None
                 print "The profile is wrapped. Use the 0th order polynomial in BG subtraction."
             ## A first-order bg removal is carried out only when the profile is not wrapped.
             else:
@@ -762,6 +767,11 @@ class radfil(object):
                 ## Remove bg and prepare for fitting
                 xfit, yfit = self.masterx[mask], self.mastery[mask]
                 yfit = yfit - self.bgfit(xfit)
+                ## pass nobs to fitter; masked
+                if self.binning:
+                    self.nobsfit = self.masternobs[mask]
+                else:
+                    self.nobsfit = None
 
         ## If no bgdist
         else:
@@ -770,6 +780,11 @@ class radfil(object):
             self.ybg_filtered = None
             ## Set up fitting without bg removal.
             xfit, yfit = self.masterx[mask], self.mastery[mask]
+            ## pass nobs to fitter; masked
+            if self.binning:
+                self.nobsfit = self.masternobs[mask]
+            else:
+                self.nobsfit = None
         self.xfit, self.yfit = xfit, yfit
 
         # Fit Model
@@ -782,7 +797,10 @@ class radfil(object):
                                     bounds = {'amplitude': (0., np.inf),
                                              'stddev': (0., np.inf)})
             fit_g = fitting.LevMarLSQFitter()
-            g = fit_g(g_init, self.xfit, self.yfit)
+            if self.binning:
+                g = fit_g(g_init, self.xfit, self.yfit, weights = self.nobsfit)
+            else:
+                g = fit_g(g_init, self.xfit, self.yfit)
             self.profilefit = g.copy()
             print '==== Gaussian ===='
             print 'amplitude: %.3E'%self.profilefit.parameters[0]
@@ -794,7 +812,10 @@ class radfil(object):
                             flatteningRadius = np.std(self.xfit))
 
             fit_g = fitting.LevMarLSQFitter()
-            g = fit_g(g_init, self.xfit, self.yfit)
+            if self.binning:
+                g = fit_g(g_init, self.xfit, self.yfit, weights = self.nobsfit)
+            else:
+                g = fit_g(g_init, self.xfit, self.yfit)
             self.profilefit = g.copy()
             self.profilefit.parameters[2] = abs(self.profilefit.parameters[2]) #Make sure R_flat always positive
             print '==== Plummer-like ===='
