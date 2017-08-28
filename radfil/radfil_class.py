@@ -566,7 +566,7 @@ class radfil(object):
             self.bins = None
             masterx = self.xall
             mastery = self.yall
-            masterobs = None
+            masternobs = None
             print "No binning is applied."
 
         # Close the figure
@@ -575,7 +575,7 @@ class radfil(object):
         # Return the profile sent to `fit_profile`.
         self.masterx = masterx
         self.mastery = mastery
-        self.masterobs = masterobs
+        self.masternobs = masternobs
 
 
         ## all are unpadded now.
