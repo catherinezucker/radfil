@@ -542,6 +542,10 @@ class radfil(object):
             mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
 
+            # record the number of samples in each bin
+            masternobs = np.asarray([np.sum(((self.xall >= (X-.5*np.diff(bins)[0]))&\
+                                  (self.xall < (X+.5*np.diff(bins)[0])))) for X in masterx])
+
             self.bins = bins
         ## If the input is the edges of bins:
         elif isinstance(bins, np.ndarray) and (bins.ndim == 1):
@@ -551,6 +555,10 @@ class radfil(object):
             mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
 
+            # record the number of samples in each bin
+            masternobs = np.asarray([np.sum(((self.xall >= (X-.5*np.diff(bins)[0]))&\
+                                  (self.xall < (X+.5*np.diff(bins)[0])))) for X in masterx])
+
             self.bins = bins
         ## If the input is not bins-like.
         else:
@@ -558,14 +566,16 @@ class radfil(object):
             self.bins = None
             masterx = self.xall
             mastery = self.yall
+            masterobs = None
             print "No binning is applied."
 
         # Close the figure
         #plt.close()
 
         # Return the profile sent to `fit_profile`.
-        self.masterx=masterx
-        self.mastery=mastery
+        self.masterx = masterx
+        self.mastery = mastery
+        self.masterobs = masterobs
 
 
         ## all are unpadded now.
