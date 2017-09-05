@@ -242,14 +242,10 @@ class radfil(object):
             An integer indicating how frequently you'd like to make sample cuts
             across the filament.
 
-        bins: int or 1D numpy.ndarray, optional (default=120)
+        bins: int or 1D numpy.ndarray, optional
             The number of bins or the actual bin edges you'd like to divide the whole profile (-cutdist to +cutdist) into, assuming nobins=False.
             If false, all of the individual profiles are binned by distance from r=0 pc and then the median column density
             in each of these bins is taken to determine the master profile
-
-        norm_constant: float, optional (default=1e+22)
-            Would you like to normalize your column densites (or flux) values by some normalization constant? If so
-            enter it as a float or int
 
         shift: boolean (default = True)
             Indicates whether to shift the profile to center at the peak value.
@@ -356,7 +352,7 @@ class radfil(object):
             xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
             ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
             ## plot
-            fig=plt.figure(figsize=(8,8))
+            fig=plt.figure(figsize=(10,5))
             ax=plt.gca()
             ax.imshow(self.image,
                       origin='lower',
@@ -366,7 +362,7 @@ class radfil(object):
             ax.contourf(self.mask,
                         levels = [0., .5],
                         colors = 'w')
-            ax.plot(xspline, yspline, 'r', label='fit', lw=2, alpha=0.5)
+            ax.plot(xspline, yspline, 'r', label='fit', lw=3, alpha=1.0)
             ax.set_xlim(max(0., xmin-.1*(xmax-xmin)), min(self.mask.shape[1]-.5, xmax+.1*(xmax-xmin)))
             ax.set_ylim(max(0., ymin-.1*(ymax-ymin)), min(self.mask.shape[0]-.5, ymax+.1*(ymax-ymin)))
             ax.set_xticklabels([])
@@ -432,7 +428,7 @@ class radfil(object):
             if self.shift:
                 self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
                              np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
-                             'b.', markersize = 10.)
+                             'b.', markersize = 10.,alpha=0.75)
         # if no cutting
         else:
             ## warnings.warn if samp_int exists.
@@ -539,7 +535,7 @@ class radfil(object):
             minR, maxR = np.min(self.xall), np.max(self.xall)
             bins = np.linspace(minR, maxR, bins+1)
             masterx = bins[:-1]+.5*np.diff(bins)
-            mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
+            mastery = np.asarray([np.nanmedian(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
 
             # record the number of samples in each bin
@@ -552,7 +548,7 @@ class radfil(object):
             self.binning = True
             bins = bins
             masterx = bins[:-1]+.5*np.diff(bins) ## assumes linear binning.
-            mastery = np.asarray([np.median(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
+            mastery = np.asarray([np.nanmedian(self.yall[((self.xall >= (X-.5*np.diff(bins)[0]))&\
                                   (self.xall < (X+.5*np.diff(bins)[0])))]) for X in masterx])
 
             # record the number of samples in each bin
@@ -576,14 +572,6 @@ class radfil(object):
         self.masterx = masterx
         self.mastery = mastery
         self.masternobs = masternobs
-
-
-        ## all are unpadded now.
-        #return image, mask, and spine to original image dimensions without padding
-        #if self.padsize!=None and self.padsize!=0:
-        #    self.image=self.image[self.padsize:self.image.shape[0]-self.padsize,self.padsize:self.image.shape[1]-self.padsize]
-        #    self.mask=self.mask[self.padsize:self.mask.shape[0]-self.padsize,self.padsize:self.mask.shape[1]-self.padsize]
-        #    self.filspine=self.filspine[self.padsize:self.filspine.shape[0]-self.padsize,self.padsize:self.filspine.shape[1]-self.padsize]
 
         # Return a dictionary to store the key setup Parameters
         self._params['__init__']['image'] = self.image
@@ -929,7 +917,6 @@ class radfil(object):
         axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
 
 
-
         axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
         axis.text(0.97, 0.95,"{}\nFit".format(fitfunc_style), ha='right',va='top', fontsize=20, color='blue',fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
         axis.tick_params(labelsize=14)
@@ -938,7 +925,7 @@ class radfil(object):
         fig.tight_layout()
         fig.subplots_adjust(hspace=0)
         fig.text(0.5, -0.05, "Radial Distance ({})".format(str(self.imgscale.unit)),fontsize=25,ha='center')
-        fig.text(-0.05, 0.5, "Profile Height",fontsize=25,va='center',rotation=90)
+        fig.text(-0.05, 0.5, r"Column Density (cm$^{-2}$)",fontsize=25,va='center',rotation=90)
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
