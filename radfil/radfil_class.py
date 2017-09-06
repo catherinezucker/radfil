@@ -925,7 +925,7 @@ class radfil(object):
         fig.tight_layout()
         fig.subplots_adjust(hspace=0)
         fig.text(0.5, -0.05, "Radial Distance ({})".format(str(self.imgscale.unit)),fontsize=25,ha='center')
-        fig.text(-0.05, 0.5, r"Column Density (cm$^{-2}$)",fontsize=25,va='center',rotation=90)
+        fig.text(-0.05, 0.5, "Profile Height",fontsize=25,va='center',rotation=90)
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
