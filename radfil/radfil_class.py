@@ -15,8 +15,8 @@ import astropy.constants as c
 from astropy.modeling import models, fitting, polynomial
 from astropy.stats import sigma_clip
 from astropy.io import fits
-from fil_finder import fil_finder_2D
 import shapely.geometry as geometry
+from shapely.geometry import LineString
 import matplotlib.colors as colors
 
 from radfil import profile_tools
@@ -37,8 +37,9 @@ class radfil(object):
 
     mask: numpy.ndarray
         A 2D array defining the shape of the filament; must be of boolean
-        type and the same shape as the image array
-
+        type and the same shape as the image array. 
+        A mask is optional ONLY if filspine is provided
+        
     beamwidth: float
         A float in units of arcseconds indicating the beamwidth of the image
         array.
@@ -51,8 +52,8 @@ class radfil(object):
 
     filspine: numpy.ndarray, optional
         A 2D array defining the longest path through the filament mask; must
-        be of boolean type and the same shape as the img array. Can also create
-        your own with the FilFinder package using the "make_fil_spine" method.
+        be of boolean type and the same shape as the image array. Can also create
+        your own with the FilFinder package using the "make_fil_spine" method below.
 
     imgscale: float, optional
         In cases where the header is not in the standrad format, imgscale is
@@ -65,7 +66,7 @@ class radfil(object):
            The image scale in pc of each pixel
     """
 
-    def __init__(self, image, mask, header = None, distance = None, filspine = None, imgscale = None):
+    def __init__(self, image, mask=None, header = None, distance = None, filspine = None, imgscale = None):
 
         # Read image
         if (isinstance(image, np.ndarray)) and (image.ndim == 2):
@@ -73,11 +74,18 @@ class radfil(object):
         else:
             raise TypeError("The input `image` has to be a 2D numpy array.")
 
-        # Read mask
-        if (isinstance(mask, np.ndarray)) and (mask.ndim == 2):
-            self.mask = (mask & np.isfinite(self.image))
+        # Read mask if user entered it...
+        if mask is not None:
+            if (isinstance(mask, np.ndarray)) and (mask.ndim == 2) and (mask.dtype=='bool'):
+                self.mask = (mask & np.isfinite(self.image))
+            else:
+                raise TypeError("The input `mask` has to be a 2d numpy array of boolean type.")
+            
+        #If user did not enter mask, make sure they entered filspine correctly
+        if mask is None is True & ((isinstance(filspine, np.ndarray)) and (filspine.ndim == 2) and (filspine.dtype=='bool')) is False:
+            raise TypeError("If mask is None, you must enter a filspine argument as a 2D array the same shape as image")
         else:
-            raise TypeError("The input `mask` has to be a 2d numpy array.")
+            self.mask=mask
 
         # Read header
         if (isinstance(header, fits.header.Header)):
@@ -102,45 +110,42 @@ class radfil(object):
             self.header = None
             warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
 
+        
+        #if user enters a filspine argument (i.e. filspine !=None), make sure it's a 2D boolean array. 
+        # if it's not, raise an error
+        if filspine is not None:
+        
+            if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)) and (filspine.dtype=='bool'):
+                self.filspine=filspine
 
-        # Read filspine/define filspine
-        if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)) or (filspine is None):
-            self.filspine = filspine
-
-            # calculate "imgscale" when the spine is provided. This saves users
-            # the trouble to run `make_fil_spine`.
-            if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)):
-                # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
-                if (self.header is not None):
-                    if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
-                        # `imgscale` in u.pc
-                        ## The change to u.pc has not been cleaned up for the rest of the code, yet.
-                        self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
-                    elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
-                        # `imgscale` in u.pc
-                        self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
-                    else:
-                        if isinstance(imgscale, numbers.Number):
-                            self.imgscale = float(imgscale) * u.pc
-                            warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                # calculate "imgscale" when the spine is provided. This saves users
+                # the trouble to run `make_fil_spine`.
+                if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)):
+                    # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
+                    if (self.header is not None):
+                        if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+                            # `imgscale` in u.pc
+                            ## The change to u.pc has not been cleaned up for the rest of the code, yet.
+                            self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
+                        elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+                            # `imgscale` in u.pc
+                            self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
                         else:
-                            self.imgscale = 1. * u.pix
-                            warnings.warn("Calculate in pixel scales.")
-                ##
-                else:
-                    self.imgscale = 1. * u.pix
-                    warnings.warn("Calculate in pixel scales.")
-            ##
-            # When there is not `filspine` in the input.
+                            if isinstance(imgscale, numbers.Number):
+                                self.imgscale = float(imgscale) * u.pc
+                                warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                            else:
+                                self.imgscale = 1. * u.pix
+                                warnings.warn("Calculate in pixel scales.")
+                    ##
+                    else:
+                        self.imgscale = 1. * u.pix
+                        warnings.warn("Calculate in pixel scales.")
             else:
-                self.filspine = None
-                self.imgscale = None
-
+                raise TypeError("If you input a filspine argument it must be a 2D array of boolean type")
         else:
             self.filspine = None
             self.imgscale = None
-            warnings.warn("The input `filspine` has to be a 2D numpy array. Ignore for now.")
-
 
         # Return a dictionary to store the key setup Parameters
         params = {'image': self.image,
@@ -157,7 +162,7 @@ class radfil(object):
     def make_fil_spine(self,beamwidth = None,verbose = False):
 
         """
-        Create filament spine using the FilFinder package 'shortest path' option
+        Create filament spine using the FilFinder package 'longest path' option
 
         Parameters:
          ----------
@@ -168,8 +173,14 @@ class radfil(object):
         Attributes
         ----------
         filspine : numpy.ndarray
-           A 2D array of 1s and 0s defining the longest path through the filament mask
+           A 2D boolean array defining the longest path through the filament mask
         """
+        
+        try:
+            from fil_finder import fil_finder_2D
+                        
+        except ImportError:
+            raise ImportError("You must install the fil_finder package to continue")
 
         # Read beamwidth
         if isinstance(beamwidth, numbers.Number):
@@ -225,8 +236,7 @@ class radfil(object):
 
         return self
 
-    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True, cutdist = None):
-
+    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True, cutdist=None): 
         """
         Build the filament profile using the inputted or recently created filament spine
 
@@ -263,9 +273,13 @@ class radfil(object):
 
             Setting `cut = False` will make `radfil` calculate a distance and a
             height/value for every pixel inside the mask.
+            
+        cutdist: float or int
+            If using a pre-computed spine, and you would like to shift to the peak column density value (shift=True),
+            you must enter a cutdist, which indicates the radial distance from the spine you'd like to search for the
+            peak column density along each cut. This will create a mask whose outer boundary is
+            defined by all points equidistant from the spine at the value of cutdist. 
 
-        cutdist: float, optional (default = None)
-            The distance out to which the profile is maked and stored in profile_masked.
 
         Attributes
         ----------
@@ -345,10 +359,49 @@ class radfil(object):
             ## Notice that the result containt points on the spline that are not
             ## evenly sampled.  This might introduce biases when using a single
             ## number `samp_int`.
+            
+            #Make sure no-mask case works. If they want to shift and have no mask, need to enter cutdist; otherwise raise warning       
+            #If everything checks out, create the new mask for them using their inputted cutdist     
+            if shift is True and self.mask is None:
+                if isinstance(cutdist, numbers.Number):
+                    try:
+                        from descartes import PolygonPatch
+                        
+                    except ImportError:
+                        raise ImportError("You must install the descartes package to continue")
+                
+                    self.cutdist = float(cutdist) * self.imgscale.unit
+                    
+                    spine=LineString([(i[0], i[1]) for i in zip(xspline,yspline)])
+
+                    boundary = spine.buffer(self.cutdist.value/self.imgscale.value)
+                    boundarypatch=PolygonPatch(boundary)
+
+                    boundaryline=boundarypatch.get_verts() #green boundary of MST filament
+
+                    # calculate the x and y points possibly within the image
+                    y_int = np.arange(0, self.image.shape[0])
+                    x_int = np.arange(0, self.image.shape[1])
+
+                    # create a list of possible coordinates
+                    g = np.meshgrid(x_int, y_int)
+                    coords = list(zip(*(c.flat for c in g)))
+
+                    # create the list of valid coordinates inside contours
+                    newmaskpoints = np.vstack([p for p in coords if boundarypatch.contains_point(p, radius=0)])
+
+                    self.mask=np.zeros(self.image.shape)
+                    self.mask[newmaskpoints[:,1],newmaskpoints[:,0]]=1
+                    self.mask=self.mask.astype(bool)
+                
+                else:
+                    raise TypeError("If shift=True and no mask is provided, you need to enter a valid cutdist in pc, which indicates \
+                                the radial distance from the spine along which to search for the peak column density pixel")
+            
 
             ## Plot the results ##########
             ## prepare
-            vmin, vmax = np.min(self.image[self.mask]), np.percentile(self.image[self.mask], 98.)
+            vmin, vmax = np.min(self.image[self.mask]), np.nanpercentile(self.image[self.mask], 98.)
             xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
             ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
             ## plot
@@ -397,14 +450,8 @@ class radfil(object):
                     dictionary_cuts['profile'].append(profile[1])
                     dictionary_cuts['plot_peaks'].append(profile[2])
                     dictionary_cuts['plot_cuts'].append(profile[3])
-
-                    ##
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length*self.imgscale.value)
-                    ##
-                    if isinstance(cutdist, numbers.Number):
-                        self.cutdist = cutdist*self.imgscale.unit
-                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
-                                                                             mask = (abs(cut_distance) >= cutdist)))
+
             elif (self.imgscale.unit == u.pix):
                 for n in range(len(self.points)):
                     profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
@@ -413,14 +460,8 @@ class radfil(object):
                     dictionary_cuts['profile'].append(profile[1])
                     dictionary_cuts['plot_peaks'].append(profile[2])
                     dictionary_cuts['plot_cuts'].append(profile[3])
-
-                    ##
                     dictionary_cuts['mask_width'].append(geometry.LineString(profile[3]).length)
-                    ##
-                    if isinstance(cutdist, numbers.Number):
-                        self.cutdist = cutdist*self.imgscale.unit
-                        dictionary_cuts['profile_masked'].append(np.ma.array(profile[1],\
-                                                                             mask = (abs(cut_distance) >= cutdist)))
+
 
             # Return the complete set of cuts. Including those outside `cutdist`.
             self.dictionary_cuts = dictionary_cuts
@@ -462,11 +503,10 @@ class radfil(object):
             agrid = np.argmin(np.array([np.hypot(xgrid-xspine[i], ygrid-yspine[i]) for i in range(len(xspine))]),
                               axis = 0)
             mask_agrid = (agrid != agrid.max()) & (agrid != 0)
-            ## filtering using the cutdist is done when outputing
 
             ## Plot the results #####
             ## prepare
-            vmin, vmax = np.min(self.image[self.mask]), np.percentile(self.image[self.mask], 98.)
+            vmin, vmax = np.min(self.image[self.mask]), np.nanpercentile(self.image[self.mask], 98.)
             xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
             ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
             ## plot
@@ -494,32 +534,18 @@ class radfil(object):
                 dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
                 dictionary_cuts['plot_peaks'] = None
                 dictionary_cuts['plot_cuts'] = None
-
-                ##
-                if isinstance(cutdist, numbers.Number):
-                    self.cutdist = cutdist*self.imgscale.unit
-                    dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
-                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
+                                                                    
             elif (self.imgscale.unit == u.pix):
                 dictionary_cuts['distance'] = [[line.distance(geometry.Point(coord))*self.imgscale.to(u.pix).value for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
                 dictionary_cuts['profile'] = [[self.image[coord[1], coord[0]] for coord in zip(np.where(mask_agrid)[1], np.where(mask_agrid)[0])]]
                 dictionary_cuts['plot_peaks'] = None
                 dictionary_cuts['plot_cuts'] = None
 
-                ##
-                if isinstance(cutdist, numbers.Number):
-                    self.cutdist = cutdist*self.imgscale.unit
-                    dictionary_cuts['profile_masked'] = np.ma.array(dictionary_cuts['profile'],
-                                                                    mask = abs(np.asarray(dictionary_cuts['distance'])) >= cutdist)
             self.dictionary_cuts = dictionary_cuts
 
-
-        # Stack the result.
-        ## xall, yall = np.concatenate(self.dictionary_cuts['distance']), np.concatenate(self.dictionary_cuts['profile'])
-        mask_cutdist = np.concatenate([~singlecut.mask for singlecut in self.dictionary_cuts['profile_masked']])
-        self.mask_cutdist=mask_cutdist
-        xall, yall = np.concatenate(self.dictionary_cuts['distance'])[mask_cutdist],\
-                     np.concatenate(self.dictionary_cuts['profile'])[mask_cutdist]
+        
+        xall, yall = np.concatenate(self.dictionary_cuts['distance']),\
+                     np.concatenate(self.dictionary_cuts['profile'])
 
         ## Store the values.
         self.xall = xall ## in pc
@@ -564,10 +590,7 @@ class radfil(object):
             mastery = self.yall
             masternobs = None
             print "No binning is applied."
-
-        # Close the figure
-        #plt.close()
-
+            
         # Return the profile sent to `fit_profile`.
         self.masterx = masterx
         self.mastery = mastery
@@ -581,8 +604,7 @@ class radfil(object):
                   'shift': self.shift,
                   'wrap': self.wrap,
                   'bins': self.bins,
-                  'samp_int': self.samp_int,
-                  'cutdist': self.cutdist}
+                  'samp_int': self.samp_int}
         self._params['build_profile'] = params
 
         # Return a dictionary to store the results
@@ -617,13 +639,10 @@ class radfil(object):
             which always runs from smaller axis-0 indices to larger axis-0 indices.
 
         bgdist: tuple-like, with a shape (2,)
-            The radial distance range that defines the data points to be used in background subtraction.
+            The radial distance range that defines the data points to be used in background subtraction; if None no background is fit
 
         fitfunc: string
             Options include "Gaussian" or "Plummer"
-
-        verbose: boolean,optional (default=False)
-            Would you like to display the plots?
 
         bgdegree: integer (default = 1)
             The order of the polynomial used in background subtraction.  Active only when wrap = False.
@@ -821,10 +840,12 @@ class radfil(object):
             axis = ax[0]
 
             #Adjust axes limits
-            axis.set_xlim(np.min(self.xall), np.max(self.xall))
-            axis.set_ylim(np.percentile(self.yall,0)-np.abs(0.5*np.percentile(self.yall,0)),np.percentile(self.yall,99.9)+np.abs(0.25*np.percentile(self.yall,99.9)))
+            #axis.set_xlim(np.min(self.xall), np.max(self.xall))
+            xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
+            axis.set_xlim(-xlim,+xlim)
+            axis.set_ylim(np.nanpercentile(self.yall,0)-np.abs(0.5*np.nanpercentile(self.yall,0)),np.nanpercentile(self.yall,99.9)+np.abs(0.25*np.nanpercentile(self.yall,99.9)))
 
-            axis.plot(self.xall, self.yall, 'k.', markersize = 8., alpha = .1)
+            axis.plot(self.xall, self.yall, 'k.', markersize = 1., alpha = .1)
 
             ##########
             if self.binning:
@@ -874,11 +895,13 @@ class radfil(object):
 
         ## Plot model
         #Adjust axis limit based on percentiles of data
-        axis.set_xlim(np.min(self.xall), np.max(self.xall))
-        axis.set_ylim(np.percentile(yplot,0)-np.abs(0.5*np.percentile(yplot,0)),np.percentile(yplot,99.9)+np.abs(0.25*np.percentile(yplot,99.9)))
+        #axis.set_xlim(np.min(self.xall), np.max(self.xall))
+        xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
+        axis.set_xlim(-xlim,+xlim)
+        axis.set_ylim(np.nanpercentile(yplot,0)-np.abs(0.5*np.nanpercentile(yplot,0)),np.nanpercentile(yplot,99.9)+np.abs(0.25*np.nanpercentile(yplot,99.9)))
 
 
-        axis.plot(xplot, yplot, 'k.', markersize = 8., alpha = .1)
+        axis.plot(xplot, yplot, 'k.', markersize = 1., alpha = .1)
         if self.binning:
             if self.bgdist is not None:
                 plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery-self.bgfit(self.masterx), self.mastery-self.bgfit(self.masterx)))
@@ -925,7 +948,7 @@ class radfil(object):
         fig.tight_layout()
         fig.subplots_adjust(hspace=0)
         fig.text(0.5, -0.05, "Radial Distance ({})".format(str(self.imgscale.unit)),fontsize=25,ha='center')
-        fig.text(-0.05, 0.5, r"Column Density (cm$^{-2}$)",fontsize=25,va='center',rotation=90)
+        fig.text(-0.05, 0.5, "Profile Height",fontsize=25,va='center',rotation=90)
 
         # Return a dictionary to store the key setup Parameters
         params = {'bgdist': self.bgdist,
@@ -1010,48 +1033,6 @@ class radfil(object):
         self.FWHM, self.FWHM_deconv = FWHM, FWHM_deconv
         self._results['FWHM'] = FWHM
         self._results['FWHM_deconv'] = FWHM_deconv
-
-        ###########################
-        #OLD CODE RECORDS (Can delete later)
-        """
-        # Return FWHM from both Plummer and Guassian
-        FWHM = {'gaussian': 2.*np.sqrt(2.*np.log(2.))*self.profilefit_gaussian.parameters[2],
-                'plummer': 2.*self.profilefit_plummer.parameters[2]*\
-                           np.sqrt(2.**(2./(self.profilefit_plummer.parameters[1]-1.)) - 1.)}
-        if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
-            beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
-            print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
-            if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
-                FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
-            else:
-                FWHM['gaussian_deconvolved'] = np.nan
-                warnings.warn("The Gaussian width is not resolved.")
-            if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
-                FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
-            else:
-                FWHM['plummer_deconvolved'] = np.nan
-                warnings.warn("The Plummer width is not resolved.")
-
-
-        elif (self.beamwidth.unit == u.pix):
-            beamwidth_phys = self.beamwidth.value
-            print 'Beamwidth in the Pixel Unit:', self.beamwidth
-            if np.isfinite(np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.)):
-                FWHM['gaussian_deconvolved'] = np.sqrt(FWHM['gaussian']**2.-beamwidth_phys**2.).value
-            else:
-                FWHM['gaussian_deconvolved'] = np.nan
-                warnings.warn("The Gaussian width is not resolved.")
-            if np.isfinite(np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.)):
-                FWHM['plummer_deconvolved'] = np.sqrt(FWHM['plummer']**2.-beamwidth_phys**2.).value
-            else:
-                FWHM['plummer_deconvolved'] = np.nan
-                warnings.warn("The Plummer width is not resolved.")
-        else:
-            FWHM['gaussian_deconvolved'] = np.nan
-            FWHM['plummer_deconvolved'] = np.nan
-            warnings.warn("A beamwidth is not found. Deconvolved FWHMs cannot be derived.")
-
-        """
 
         return self
 
