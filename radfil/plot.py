@@ -3,6 +3,7 @@ import numbers
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 from astropy.wcs import WCS
+import styles
 
 
 def plotCuts(radobj, ax):
@@ -209,6 +210,3 @@ class RadFilPlotter(object):
 
         else:
             raise ValueError('plotFeature has to be either "model" or "bg".')
-
-
-        

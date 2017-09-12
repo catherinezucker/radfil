@@ -1047,7 +1047,7 @@ class radfil(object):
         '''
         Return a `radfil.plot.RadFilPlotter` class.
         '''
-        print "This is a feature under active development. Use at your own risk."
+        #print "This is a feature under active development. Use at your own risk."
 
         from radfil import plot
         return plot.RadFilPlotter(self)
