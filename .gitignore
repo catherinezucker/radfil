@@ -64,6 +64,10 @@ RadFil_fixing.ipynb
 tests/tests.ipynb
 *.ipynb_checkpoints
 
+# FITS Files
+tests/data/
+Tutorial_data/
+
 # Keynote files for presentation
 testingResults.key
 
