@@ -37,7 +37,7 @@ rcParams['figure.subplot.right'] = .97
 rcParams['figure.subplot.bottom'] = .1
 rcParams['figure.subplot.top'] = .96
 rcParams['figure.subplot.wspace'] = .02
-rcParams['figure.subplot.hspace'] = .02
+rcParams['figure.subplot.hspace'] = 0.
 # savefig
 rcParams['savefig.jpeg_quality'] = 100
 rcParams['savefig.dpi'] = 180
