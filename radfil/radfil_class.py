@@ -869,7 +869,7 @@ class radfil(object):
                               edgecolor = 'g',
                               linestyle = '--',
                               linewidth = 1.)
-            axis.plot(np.linspace(np.min(self.xall),np.max(self.xall),100), self.bgfit(np.linspace(self.xall.min(), self.xall.max(), 100)),'g-', lw=3)
+            axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200), self.bgfit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200)),'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
 
@@ -943,7 +943,7 @@ class radfil(object):
                               linewidth = 1.)
 
         # Plot the predicted curve
-        axis.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
+        axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200), self.profilefit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200)), 'b-', lw = 3., alpha = .6)
 
 
         axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})

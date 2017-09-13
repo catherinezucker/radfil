@@ -19,7 +19,8 @@ def plotCuts(radobj, ax):
 
         ax.plot(toPlot[:, 0], toPlot[:, 1], 'b.',
                 markersize = 14.,
-                alpha=0.75)
+                alpha=0.75,
+                zorder = 999)
 
     # plot the cuts
     if dictionary_cuts['plot_cuts'] is not None:
@@ -147,7 +148,7 @@ class RadFilPlotter(object):
                                       linewidth = 1.)
 
                 # Plot the predicted curve
-                ax.plot(np.linspace(np.min(xplot),np.max(xplot),100), self.radobj.profilefit(np.linspace(np.min(xplot),np.max(xplot),100)), 'b-', lw = 3., alpha = .6)
+                ax.plot(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],200), self.radobj.profilefit(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],200)), 'b-', lw = 3., alpha = .6)
 
 
                 ax.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.radobj.profilefit.param_names[0],self.radobj.profilefit.parameters[0],self.radobj.profilefit.param_names[1],self.radobj.profilefit.parameters[1],self.radobj.profilefit.param_names[2],self.radobj.profilefit.parameters[2]),ha='left',va='top', fontweight='bold',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
@@ -188,7 +189,7 @@ class RadFilPlotter(object):
                                   edgecolor = 'g',
                                   linestyle = '--',
                                   linewidth = 1.)
-                ax.plot(np.linspace(np.min(self.radobj.xall),np.max(self.radobj.xall),100), self.radobj.bgfit(np.linspace(self.radobj.xall.min(), self.radobj.xall.max(), 100)),'g-', lw=3)
+                ax.plot(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 200), self.radobj.bgfit(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 200)),'g-', lw=3)
                 ax.set_xticklabels([])
                 #ax.tick_params(labelsize=14)
 
