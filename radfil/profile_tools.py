@@ -179,7 +179,7 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     mask_peak = (np.round(centers[:, 0]).astype(int) == int(round(xpeak)))&\
                 (np.round(centers[:, 1]).astype(int) == int(round(ypeak)))
     ## plot the cut
-    axis.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth = 1.)
+    axis.plot([start[0], end[0]], [start[1], end[1]], 'r-', linewidth = 1.,alpha=1)
 
     # Shift.
     if shift:

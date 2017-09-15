@@ -33,7 +33,6 @@ def plotCuts(radobj, ax):
     return ax
 
 
-
 class RadFilPlotter(object):
 
     '''
