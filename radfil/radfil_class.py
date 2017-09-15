@@ -35,27 +35,27 @@ class radfil(object):
     image : numpy.ndarray
         A 2D array of the data to be analyzed.
 
-    mask: numpy.ndarray
+    mask: numpy.ndarray 
         A 2D array defining the shape of the filament; must be of boolean
         type and the same shape as the image array.
         A mask is optional ONLY if filspine is provided
 
-    beamwidth: float
-        A float in units of arcseconds indicating the beamwidth of the image
-        array.
+    beamwidth: float 
+        A float in units of arcseconds indicating the beamwidth of the image array.
 
     header : astropy.io.fits.Header
         The header corresponding to the image array
 
-    distance : a number-like object
+    distance : a number-like object 
         Distance to the filament; must be entered in pc
 
-    filspine: numpy.ndarray, optional
+    filspine: numpy.ndarray 
         A 2D array defining the longest path through the filament mask; must
         be of boolean type and the same shape as the image array. Can also create
         your own with the FilFinder package using the "make_fil_spine" method below.
+        A filspine is optional when mask is provided. 
 
-    imgscale: float, optional
+    imgscale: float 
         In cases where the header is not in the standrad format, imgscale is
         specified.  This is overwritten when the header and proper header keys
         exist.
@@ -111,7 +111,7 @@ class radfil(object):
             warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
 
 
-        #if user enters a filspine argument (i.e. filspine !=None), make sure it's a 2D boolean array.
+        #if user enters a filspine argument (i.e. filspine!=None), make sure it's a 2D boolean array.
         # if it's not, raise an error
         if filspine is not None:
 
@@ -174,6 +174,9 @@ class radfil(object):
         ----------
         filspine : numpy.ndarray
            A 2D boolean array defining the longest path through the filament mask
+           
+        length: float
+            The length of the filament; only accessible if make_fil_spine is called
         """
 
         try:
@@ -246,19 +249,24 @@ class radfil(object):
 
         pts_mask: numpy.ndarray
             A 2D array masking out any regions from image array you don't want to sample; must be of boolean
-            type and the same shape as the image array
+            type and the same shape as the image array. The spine points within the masked out region will then be
+            excluded from the list of cuts and the master profile. 
 
         samp_int: integer (default=3)
             An integer indicating how frequently you'd like to make sample cuts
-            across the filament.
+            across the filament. Very roughly corresponds to sampling frequency in pixels
 
         bins: int or 1D numpy.ndarray, optional
-            The number of bins or the actual bin edges you'd like to divide the whole profile (-cutdist to +cutdist) into, assuming nobins=False.
-            If false, all of the individual profiles are binned by distance from r=0 pc and then the median column density
-            in each of these bins is taken to determine the master profile
+            The number of bins (int) or the actual bin edges (numpy array) you'd like to divide the profile into. 
+            If entered as an integer "n", the profile will be divided into n bins, from the minimum radial distance
+            found in any cut to the maximum radial distance found in any cut. If an array (i.e. np.linspace(-2,2,100)). 
+            the array values will represent the bin edges (i.e. 100 bins evenly distributed between -2 and 2).
+            If entered, the profile will be averaged in each bin, and the fit_profile method will only consider the bin-averaged data
 
         shift: boolean (default = True)
-            Indicates whether to shift the profile to center at the peak value.
+            Indicates whether to shift the profile to center at the peak value. The peak value is determined
+            by searching for the peak value along each cut, either confined within the filament mask,
+            or confined within some value cutdist from the spine (if no mask is entered)
 
         wrap: boolean (default = False)
             Indicates whether to wrap around the central pixel, so that the final profile
@@ -268,10 +276,8 @@ class radfil(object):
         make_cut: boolean (default = True)
             Indicates whether to perform cuts when extracting the profile. Since
             the original spine found by `fil_finder_2D` is not likely differentiable
-            everywhere, setting `cut = True` necessates a spline fit to smoothe
-            the spine. See related documentation above.
-
-            Setting `cut = False` will make `radfil` calculate a distance and a
+            everywhere, setting `cut = True` necessitates a spline fit to smoothe
+            the spine. Setting `cut = False` will make `radfil` calculate a distance and a
             height/value for every pixel inside the mask.
 
         cutdist: float or int
@@ -283,7 +289,6 @@ class radfil(object):
 
         Attributes
         ----------
-
 
         xall, yall: 1D numpy.ndarray (list-like)
             All data points (with or without cutting).
@@ -645,7 +650,7 @@ class radfil(object):
             Options include "Gaussian" or "Plummer"
 
         bgdegree: integer (default = 1)
-            The order of the polynomial used in background subtraction.  Active only when wrap = False.
+            The order of the polynomial used in background subtraction (options are 1 or 0).  Active only when wrap = False.
 
         beamwidth: float or int
             If not inputed into the make_fil_spine method, beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits
@@ -840,7 +845,6 @@ class radfil(object):
             axis = ax[0]
 
             #Adjust axes limits
-            #axis.set_xlim(np.min(self.xall), np.max(self.xall))
             xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
             if not self.wrap:
                 axis.set_xlim(-xlim,+xlim)
@@ -898,7 +902,6 @@ class radfil(object):
 
         ## Plot model
         #Adjust axis limit based on percentiles of data
-        #axis.set_xlim(np.min(self.xall), np.max(self.xall))
         xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
         if not self.wrap:
             axis.set_xlim(-xlim,+xlim)
