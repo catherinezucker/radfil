@@ -477,6 +477,8 @@ class radfil(object):
                              'b.', markersize = 10.,alpha=0.75)
         # if no cutting
         else:
+            warnings.warn("The profile builder when cut=False is currently under development, and may fail with large images. Use at your own risk!!!")
+
             ## warnings.warn if samp_int exists.
             if (self.samp_int is not None):
                 self.samp_int = None
