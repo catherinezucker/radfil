@@ -388,7 +388,7 @@ class radfil(object):
                     y_int = np.arange(0, self.image.shape[0])
                     x_int = np.arange(0, self.image.shape[1])
 
-                    # create a list of possible coordinates
+                    # create a list of possible coordinates (inspired by https://stackoverflow.com/questions/25145931/extract-coordinates-enclosed-by-a-matplotlib-patch)
                     g = np.meshgrid(x_int, y_int)
                     coords = list(zip(*(c.flat for c in g)))
 
