@@ -1,5 +1,9 @@
 # RadFil
-RadFil is a radial density profile building and fitting tool for interstellar filaments. All you need to build and fit a radial density profile for your own filaments is an image array and (in most cases) a boolean mask array delineating the boundary of your filament. RadFil can do the rest! 
+RadFil is a radial density profile building and fitting tool for interstellar filaments. All you need to build and fit a radial density profile for your own filaments is an image array and (in most cases) a boolean mask array delineating the boundary of your filament. RadFil can do the rest! Please see the tutorial (housed in RadFil_Tutorial.ipynb) for a complete working example of the code. 
+
+Python2 vs. Python3
+------------
+*   While RadFil is written to be cross-compatible between python2 and python3, it relies on the fil_finder package to build filament spines via medial axis skeletonization of the filament masks. Since fil_finder is currently only compatible with python2 (support for python3 is planned in future) RadFil must be run in python2 if you do not already have a filament spine that has been precomputed for input into RadFil.
 
 
 Installation
