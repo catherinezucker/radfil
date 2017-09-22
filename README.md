@@ -3,7 +3,7 @@ RadFil is a radial density profile building and fitting tool for interstellar fi
 
 Python2 vs. Python3
 ------------
-*   While RadFil is written to be cross-compatible between python2 and python3, it relies on the fil_finder package to build filament spines via medial axis skeletonization of the filament masks. Since fil_finder is currently only compatible with python2 (support for python3 is planned in future) RadFil must be run in python2 if you do not already have a filament spine that has been precomputed for input into RadFil.
+*   While RadFil is written to be cross-compatible between python2 and python3, it relies on the FilFinder package to build filament spines via medial axis skeletonization of the filament masks. Since FilFinder is currently only compatible with python2 (support for python3 is planned in future) RadFil must be run in python2 if you do not already have a filament spine that has been precomputed for input into RadFil.
 
 
 Installation
