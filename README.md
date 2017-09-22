@@ -32,6 +32,6 @@ Requires:
 
 Optional:
 
- *  fil_finder -- only required if you are not inputting a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you
- *  descartes -- only required if you do not input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density 
+ *  fil_finder -- only required if you are *not* inputing a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you
+ *  descartes -- only required if you do *not* input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density 
 
