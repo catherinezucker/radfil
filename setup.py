@@ -1,8 +1,8 @@
 from distutils.core import setup
 
 setup(
-  name = 'RadFil',
-  packages = ['RadFil'],
+  name = 'radfil',
+  packages = ['radfil'],
   version = '0.1.2',
   description = 'Build radial density profiles for interstellar filaments',
   author = ['Catherine Zucker', 'Hope Chen'],
