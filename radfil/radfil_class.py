@@ -183,7 +183,7 @@ class radfil(object):
             from fil_finder import fil_finder_2D
 
         except ImportError:
-            raise ImportError("You must install the fil_finder package to continue")
+            raise ImportError("To use this method, you must install the fil_finder package to continue.")
 
         # Read beamwidth
         if isinstance(beamwidth, numbers.Number):
@@ -672,6 +672,8 @@ class radfil(object):
 
         profilefit: astropy.modeling.functional_models
             The fitting results.
+            
+        param_cov: the covariance matrix of the parameters
 
         """
 
@@ -811,11 +813,14 @@ class radfil(object):
                                     bounds = {'amplitude': (0., np.inf),
                                              'stddev': (0., np.inf)})
             fit_g = fitting.LevMarLSQFitter()
+            
             if self.binning:
                 g = fit_g(g_init, self.xfit, self.yfit, weights = self.nobsfit)
             else:
                 g = fit_g(g_init, self.xfit, self.yfit)
+                
             self.profilefit = g.copy()
+            self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
             print '==== Gaussian ===='
             print 'amplitude: %.3E'%self.profilefit.parameters[0]
             print 'width: %.3f'%self.profilefit.parameters[2]
@@ -831,6 +836,7 @@ class radfil(object):
             else:
                 g = fit_g(g_init, self.xfit, self.yfit)
             self.profilefit = g.copy()
+            self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
             self.profilefit.parameters[2] = abs(self.profilefit.parameters[2]) #Make sure R_flat always positive
             print '==== Plummer-like ===='
             print 'amplitude: %.3E'%self.profilefit.parameters[0]
@@ -839,7 +845,6 @@ class radfil(object):
 
         else:
             raise ValueError("Reset fitfunc; no valid function entered. Options include 'Gaussian' or 'Plummer'")
-
 
         ### Plot background fit if bgdist is not none ###
         if self.bgdist is not None:
