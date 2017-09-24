@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(
   name = 'radfil',
   packages = ['radfil'],
-  version = '0.1.2',
+  version = '0.1.0',
   description = 'Build radial density profiles for interstellar filaments',
   author = ['Catherine Zucker', 'Hope Chen'],
   author_email = ['catherine.zucker@cfa.harvard.edu', 'hhchen@cfa.harvard.edu'],
