@@ -596,7 +596,7 @@ class radfil(object):
             masterx = self.xall
             mastery = self.yall
             masternobs = None
-            print("No binning is applied.")
+            print "No binning is applied."
 
         # Return the profile sent to `fit_profile`.
         self.masterx = masterx
