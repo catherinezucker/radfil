@@ -1,11 +1,27 @@
 from matplotlib import rcParams
 from cycler import cycler
+import numpy as np
 
 colors_538 = ["#30a2da",
               "#fc4f30",
               "#e5ae38",
               "#6d904f",
               "#8b8b8b"]
+
+#Set size opacity of scatter points based on total number of sampled points 
+def get_scatter_alpha(numpoints):
+    if numpoints < 1000:
+        return 0.9
+    
+    elif numpoints < 10000:
+        return 0.7
+    
+    elif numpoints < 100000:
+        return 0.5
+        
+    else:
+        return 0.1
+
 
 ### Hope's implementation ###
 # lines

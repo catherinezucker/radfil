@@ -20,10 +20,10 @@ from shapely.geometry import LineString
 import matplotlib.colors as colors
 
 from radfil import profile_tools
-from plummer import Plummer1D
+from .plummer import Plummer1D
 from matplotlib.patches import Rectangle
 
-import styles
+from . import styles
 
 class radfil(object):
 
@@ -90,9 +90,9 @@ class radfil(object):
         # Read header
         if (isinstance(header, fits.header.Header)):
             self.header = header
-            if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+            if ("CDELT1" in list(self.header.keys())) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
                 self.imgscale_ang = abs(header["CDELT1"])*u.deg # degrees
-            elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+            elif ("CD1_1" in list(self.header.keys())) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
                 self.imgscale_ang = abs(header["CD1_1"])*u.deg # degrees
         else:
             self.header = None
@@ -123,11 +123,11 @@ class radfil(object):
                 if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)):
                     # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
                     if (self.header is not None):
-                        if ("CDELT1" in self.header.keys()) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+                        if ("CDELT1" in list(self.header.keys())) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
                             # `imgscale` in u.pc
                             ## The change to u.pc has not been cleaned up for the rest of the code, yet.
                             self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
-                        elif ("CD1_1" in self.header.keys()) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+                        elif ("CD1_1" in list(self.header.keys())) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
                             # `imgscale` in u.pc
                             self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
                         else:
@@ -239,7 +239,7 @@ class radfil(object):
 
         return self
 
-    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, cut = True, cutdist=None):
+    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, make_cuts = True, cutdist=None):
         """
         Build the filament profile using the inputted or recently created filament spine
 
@@ -273,11 +273,11 @@ class radfil(object):
             will be a "half profile" with the peak near/at the center (depending on
             whether it's shifted).
 
-        make_cut: boolean (default = True)
+        make_cuts: boolean (default = True)
             Indicates whether to perform cuts when extracting the profile. Since
             the original spine found by `fil_finder_2D` is not likely differentiable
-            everywhere, setting `cut = True` necessitates a spline fit to smoothe
-            the spine. Setting `cut = False` will make `radfil` calculate a distance and a
+            everywhere, setting `make_cuts = True` necessitates a spline fit to smoothe
+            the spine. Setting `make_cuts = False` will make `radfil` calculate a distance and a
             height/value for every pixel inside the mask.
 
         cutdist: float or int
@@ -323,10 +323,10 @@ class radfil(object):
         else:
             raise TypeError("wrap has to be a boolean value. See documentation.")
         ## cut
-        if isinstance(cut, bool):
-            self.cutting = cut
+        if isinstance(make_cuts, bool):
+            self.cutting = make_cuts
         else:
-            raise TypeError("cut has to be a boolean value. See documentation.")
+            raise TypeError("make_cuts has to be a boolean value. See documentation.")
         ## samp_int
         if isinstance(samp_int, int):
             self.samp_int = samp_int
@@ -351,7 +351,7 @@ class radfil(object):
         if self.cutting:
             # Filter out wrong samp_int
             if self.samp_int is None:
-                raise TypeError("samp_int has to be an integer, when cut is True.")
+                raise TypeError("samp_int has to be an integer, when make_cuts is True.")
             # Spline calculation:
             ##set the spline parameters
             k = 3
@@ -441,8 +441,8 @@ class radfil(object):
             # Prepare for extracting the profiles
             self.xspline = xspline[1:-1:self.samp_int][pts_mask]
             self.yspline = yspline[1:-1:self.samp_int][pts_mask]
-            self.points = np.asarray(zip(self.xspline, self.yspline))
-            self.fprime = np.asarray(zip(xprime[1:-1:self.samp_int][pts_mask], yprime[1:-1:self.samp_int][pts_mask]))
+            self.points = np.asarray(list(zip(self.xspline, self.yspline)))
+            self.fprime = np.asarray(list(zip(xprime[1:-1:self.samp_int][pts_mask], yprime[1:-1:self.samp_int][pts_mask])))
 
 
             # Extract the profiles
@@ -474,7 +474,7 @@ class radfil(object):
             if self.shift:
                 self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
                              np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
-                             'b.', markersize = 10.,alpha=0.75)
+                             'b.', markersize = 10.,alpha=0.75, markeredgecolor='white',markeredgewidth=0.5)
         # if no cutting
         else:
             warnings.warn("The profile builder when cut=False is currently under development, and may fail with large images. Use at your own risk!!!")
@@ -482,10 +482,10 @@ class radfil(object):
             ## warnings.warn if samp_int exists.
             if (self.samp_int is not None):
                 self.samp_int = None
-                warnings.warn("samp_int is not used. cut is False.")
+                warnings.warn("samp_int is not used. make_cuts is False.")
             ## warnings.warn if shift and/or wrap is True.
             if (self.shift or (not self.wrap)):
-                warnings.warn("shift and/or wrap are not used. cut is False.")
+                warnings.warn("shift and/or wrap are not used. make_cuts is False.")
                 self.shift, self.wrap = False, True
 
             # Only points within pts_mask AND the original mask are used.
@@ -499,7 +499,7 @@ class radfil(object):
                                       np.round(self.xbeforespline).astype(int)])
 
             # Make the line object with Shapely
-            self.points = np.asarray(zip(self.xbeforespline[pts_mask], self.ybeforespline[pts_mask]))
+            self.points = np.asarray(list(zip(self.xbeforespline[pts_mask], self.ybeforespline[pts_mask])))
             line = geometry.LineString(self.points)
             self.xspline, self.yspline, self.fprime = None, None, None
 
@@ -527,7 +527,7 @@ class radfil(object):
             ax.contourf(self.mask,
                         levels = [0., .5],
                         colors = 'w')
-            ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.25)
+            ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.5)
             ax.set_xlim(max(0., xmin-.1*(xmax-xmin)), min(self.mask.shape[1]-.5, xmax+.1*(xmax-xmin)))
             ax.set_ylim(max(0., ymin-.1*(ymax-ymin)), min(self.mask.shape[0]-.5, ymax+.1*(ymax-ymin)))
             ax.set_xticklabels([])
@@ -596,7 +596,7 @@ class radfil(object):
             masterx = self.xall
             mastery = self.yall
             masternobs = None
-            print "No binning is applied."
+            print("No binning is applied.")
 
         # Return the profile sent to `fit_profile`.
         self.masterx = masterx
@@ -762,7 +762,7 @@ class radfil(object):
                     self.nobsfit = self.masternobs[mask]
                 else:
                     self.nobsfit = None
-                print "The profile is wrapped. Use the 0th order polynomial in BG subtraction."
+                print("The profile is wrapped. Use the 0th order polynomial in BG subtraction.")
             ## A first-order bg removal is carried out only when the profile is not wrapped.
             else:
                 ## Fit bg
@@ -821,9 +821,9 @@ class radfil(object):
                 
             self.profilefit = g.copy()
             self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
-            print '==== Gaussian ===='
-            print 'amplitude: %.3E'%self.profilefit.parameters[0]
-            print 'width: %.3f'%self.profilefit.parameters[2]
+            print('==== Gaussian ====')
+            print(('amplitude: %.3E'%self.profilefit.parameters[0]))
+            print(('width: %.3f'%self.profilefit.parameters[2]))
         ## Plummer-like model
         elif self.fitfunc == "plummer":
             g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
@@ -838,10 +838,10 @@ class radfil(object):
             self.profilefit = g.copy()
             self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
             self.profilefit.parameters[2] = abs(self.profilefit.parameters[2]) #Make sure R_flat always positive
-            print '==== Plummer-like ===='
-            print 'amplitude: %.3E'%self.profilefit.parameters[0]
-            print 'p: %.3f'%self.profilefit.parameters[1]
-            print 'R_flat: %.3f'%self.profilefit.parameters[2]
+            print('==== Plummer-like ====')
+            print(('amplitude: %.3E'%self.profilefit.parameters[0]))
+            print(('p: %.3f'%self.profilefit.parameters[1]))
+            print(('R_flat: %.3f'%self.profilefit.parameters[2]))
 
         else:
             raise ValueError("Reset fitfunc; no valid function entered. Options include 'Gaussian' or 'Plummer'")
@@ -852,18 +852,20 @@ class radfil(object):
             axis = ax[0]
 
             #Adjust axes limits
-            xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
+            #xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
+            xlim=np.max(self.bgdist*1.5)
+
             if not self.wrap:
                 axis.set_xlim(-xlim,+xlim)
             else:
                 axis.set_xlim(0., +xlim)
             axis.set_ylim(np.nanpercentile(self.yall,0)-np.abs(0.5*np.nanpercentile(self.yall,0)),np.nanpercentile(self.yall,99.9)+np.abs(0.25*np.nanpercentile(self.yall,99.9)))
 
-            axis.plot(self.xall, self.yall, 'k.', markersize = 1., alpha = .1)
+            axis.plot(self.xall, self.yall, 'k.', markersize = 1., alpha=styles.get_scatter_alpha(len(self.xall)))
 
             ##########
             if self.binning:
-                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery, self.mastery))
+                plotbinx, plotbiny = np.ravel(list(zip(self.bins[:-1], self.bins[1:]))), np.ravel(list(zip(self.mastery, self.mastery)))
                 axis.plot(plotbinx, plotbiny,
                           'r-')
 
@@ -880,7 +882,7 @@ class radfil(object):
                               edgecolor = 'g',
                               linestyle = '--',
                               linewidth = 1.)
-            axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200), self.bgfit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200)),'g-', lw=3)
+            axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],500), self.bgfit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],500)),'g-', lw=3)
             axis.set_xticklabels([])
             axis.tick_params(labelsize=14)
 
@@ -905,24 +907,26 @@ class radfil(object):
 
             xplot=self.xall
             yplot=self.yall
+            
+            xlim=np.max(np.absolute(self.fitdist))*1.5
 
 
         ## Plot model
         #Adjust axis limit based on percentiles of data
-        xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
         if not self.wrap:
             axis.set_xlim(-xlim,+xlim)
         else:
             axis.set_xlim(0., +xlim)
+            
         axis.set_ylim(np.nanpercentile(yplot,0)-np.abs(0.5*np.nanpercentile(yplot,0)),np.nanpercentile(yplot,99.9)+np.abs(0.25*np.nanpercentile(yplot,99.9)))
 
 
-        axis.plot(xplot, yplot, 'k.', markersize = 1., alpha = .1)
+        axis.plot(xplot, yplot, 'k.', markersize = 1., alpha=styles.get_scatter_alpha(len(self.xall)))
         if self.binning:
             if self.bgdist is not None:
-                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery-self.bgfit(self.masterx), self.mastery-self.bgfit(self.masterx)))
+                plotbinx, plotbiny = np.ravel(list(zip(self.bins[:-1], self.bins[1:]))), np.ravel(list(zip(self.mastery-self.bgfit(self.masterx), self.mastery-self.bgfit(self.masterx))))
             else:
-                plotbinx, plotbiny = np.ravel(zip(self.bins[:-1], self.bins[1:])), np.ravel(zip(self.mastery, self.mastery))
+                plotbinx, plotbiny = np.ravel(list(zip(self.bins[:-1], self.bins[1:]))), np.ravel(list(zip(self.mastery, self.mastery)))
             axis.plot(plotbinx, plotbiny,
                       'r-')
 
@@ -953,7 +957,7 @@ class radfil(object):
                               linewidth = 1.)
 
         # Plot the predicted curve
-        axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200), self.profilefit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],200)), 'b-', lw = 3., alpha = .6)
+        axis.plot(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],500), self.profilefit(np.linspace(axis.get_xlim()[0],axis.get_xlim()[1],500)), 'b-', lw = 3., alpha = .6)
 
 
         axis.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.profilefit.param_names[0],self.profilefit.parameters[0],self.profilefit.param_names[1],self.profilefit.parameters[1],self.profilefit.param_names[2],self.profilefit.parameters[2]),ha='left',va='top', fontsize=14, fontweight='bold',transform=axis.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
@@ -989,7 +993,7 @@ class radfil(object):
 
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
-                    print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
+                    print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
@@ -999,7 +1003,7 @@ class radfil(object):
 
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
-                    print 'Beamwidth in the Pixel Unit:', self.beamwidth
+                    print(('Beamwidth in the Pixel Unit:', self.beamwidth))
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
@@ -1022,7 +1026,7 @@ class radfil(object):
             if self.beamwidth is not None:
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
-                    print 'Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit
+                    print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
@@ -1032,7 +1036,7 @@ class radfil(object):
 
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
-                    print 'Beamwidth in the Pixel Unit:', self.beamwidth
+                    print(('Beamwidth in the Pixel Unit:', self.beamwidth))
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
