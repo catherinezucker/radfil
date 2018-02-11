@@ -3,7 +3,11 @@ RadFil is a radial density profile building and fitting tool for interstellar fi
 
 Python2 vs. Python3
 ------------
+<<<<<<< HEAD
+*   RadFil is cross-compatible between Python 2.7, Python 3.4, and Python 3.6. If you do not already have a pre-built spine and want to make one, make sure you have at least version 1.6 of fil_finder in order to ensure cross-compatibility. 
+=======
 *   Please run RadFil in Python2. Support for Python3 will be coming shortly!
+>>>>>>> 7aae27d20cccae12439f0c854f375cc68dbee50b
 
 
 Installation
@@ -30,14 +34,19 @@ Requires:
  *   matplotlib
  *   astropy
  *   shapely
- *   sklearn
+ *   scikit-learn
  *   scikit-image
  *   networkx
 
 Optional:
 
+<<<<<<< HEAD
+ *  fil_finder (at least version 1.6) -- only required if you are *not* inputing a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you
+ *  descartes -- only required if you do *not* input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density
+=======
  *  <a href="https://github.com/e-koch/FilFinder">fil-finder</a> -- only required if you are *not* inputing a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you
  *  descartes -- only required if you do *not* input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density. If you have conda, you can install descartes using the command "conda install -c conda-forge descartes"
+>>>>>>> 7aae27d20cccae12439f0c854f375cc68dbee50b
  
  Questions? Comments?
 --------------------
