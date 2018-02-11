@@ -3,8 +3,7 @@ RadFil is a radial density profile building and fitting tool for interstellar fi
 
 Python2 vs. Python3
 ------------
-*   RadFil is cross-compatible between Python 2.7, Python 3.4, and Python 3.6. If you do not already have a pre-built spine and want to make one, make sure you have at least version 1.6 of fil_finder in order to ensure cross-compatibility. 
-*   Please run RadFil in Python2. Support for Python3 will be coming shortly!
+*   RadFil is cross-compatible between Python 2.7, Python 3.4, Python 3.5, and Python 3.6. If you do not already have a pre-built spine and want to make one, make sure you have at least version 1.6 of fil_finder in order to ensure cross-compatibility. 
 
 Installation
 ------------
