@@ -35,7 +35,7 @@ Requires:
 
 Optional:
  *  <a href="https://github.com/e-koch/FilFinder">fil-finder</a> -- only required if you are *not* inputing a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you
- *  descartes -- only required if you do *not* input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density. If you have conda, you can install descartes using the command "conda install -c conda-forge descartes"
+ *   <a href="https://pypi.python.org/pypi/descartes">descartes</a>  -- only required if you do *not* input a filament mask, and you still want to shift the profile along each cut to the pixel with the peak column density. If you have conda, you can install descartes using the command "conda install -c conda-forge descartes"
  
  Questions? Comments?
 --------------------
