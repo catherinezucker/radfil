@@ -5,7 +5,8 @@ from skimage import morphology
 import scipy
 import matplotlib.pyplot as plt
 import math
-from scipy.interpolate import interp1d
+from scipy.interpolate import RegularGridInterpolator 
+
 
 from scipy.spatial import distance
 
@@ -62,7 +63,7 @@ def curveorder(x,y):
     return(xx,yy)
 
 
-def profile_builder(radobj, point, derivative, shift = True, wrap = False):
+def profile_builder(radobj, point, derivative, shift = True, fold = False):
     '''
     Build the profile using array manipulation, instead of looping.
 
@@ -82,8 +83,8 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     shift: boolean
     Indicates whether to shift the profile to center at the peak value.
 
-    wrap: boolean
-    Indicates whether to wrap around the central pixel, so that the final profile
+    fold: boolean
+    Indicates whether to fold around the central pixel, so that the final profile
     will be a "half profile" with the peak near/at the center (depending on
     whether it's shifted).
 
@@ -147,7 +148,14 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     centers =  stack[:-1]+.5*np.diff(stack, axis = 0)
 
     ## extract the values from the image and the original mask
-    image_line = image[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)]
+    #setup interpolation 
+    xgrid=np.arange(0.5,radobj.image.shape[1]+0.5,1.0)
+    ygrid=np.arange(0.5,radobj.image.shape[0]+0.5,1.0)
+    interpolator = RegularGridInterpolator((xgrid,ygrid),radobj.image.T,bounds_error=False,fill_value=None)
+    
+    image_line=interpolator(centers)
+    #image_line = image[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)]
+    
     mask_line = mask[np.round(centers[:, 1]).astype(int), np.round(centers[:, 0]).astype(int)]
     #### select the part of the mask that includes the original point
     mask_p0 = (np.round(centers[:, 0]).astype(int) == int(round(x0)))&\
@@ -175,7 +183,7 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     start, end = peak_finder[0], peak_finder[-1]
     ## find the peak here
     xpeak, ypeak = peak_finder[image_line0 == np.nanmax(image_line0)][0]
-    ## the peak mask is used to determine where to unwrap when shift = True
+    ## the peak mask is used to determine where to unfold when shift = True
     mask_peak = (np.round(centers[:, 0]).astype(int) == int(round(xpeak)))&\
                 (np.round(centers[:, 1]).astype(int) == int(round(ypeak)))
     ## plot the cut
@@ -184,20 +192,18 @@ def profile_builder(radobj, point, derivative, shift = True, wrap = False):
     # Shift.
     if shift:
         final_dist = np.hypot(centers[:, 0]-xpeak, centers[:, 1]-ypeak)
-        # unwrap
+        # unfold
         pos0 = np.where(mask_peak)[0][0]
         final_dist[:pos0] = -final_dist[:pos0]
     else:
         final_dist = np.hypot(centers[:, 0]-x0, centers[:, 1]-y0)
-        # unwrap
+        # unfold
         pos0 = np.where(mask_p0)[0][0]
         final_dist[:pos0] = -final_dist[:pos0]
 
 
-    # Wrap
-    if wrap:
+    # Fold
+    if fold:
             final_dist = abs(final_dist)
-
-
 
     return final_dist, image_line, (xpeak, ypeak), (start, end)

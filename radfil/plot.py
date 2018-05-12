@@ -3,7 +3,7 @@ import numbers
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 from astropy.wcs import WCS
-import styles
+from . import styles
 
 
 def plotCuts(radobj, ax):
@@ -18,9 +18,9 @@ def plotCuts(radobj, ax):
         toPlot = np.asarray(dictionary_cuts['plot_peaks'])
 
         ax.plot(toPlot[:, 0], toPlot[:, 1], 'b.',
-                markersize = 14.,
+                markersize = 12.,
                 alpha=0.75,
-                zorder = 999)
+                zorder = 999, markeredgecolor='white',markeredgewidth=0.5)
 
     # plot the cuts
     if dictionary_cuts['plot_cuts'] is not None:
@@ -78,13 +78,12 @@ class RadFilPlotter(object):
             ax.contourf(self.radobj.mask,
                         levels = [0., .5],
                         colors = 'w')
-            ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.25)
+            ax.plot(line.xy[0], line.xy[1], 'r', label='fit', lw=2, alpha=0.5)
             ax.set_xlim(max(0., xmin-.1*(xmax-xmin)), min(self.radobj.mask.shape[1]-.5, xmax+.1*(xmax-xmin)))
             ax.set_ylim(max(0., ymin-.1*(ymax-ymin)), min(self.radobj.mask.shape[0]-.5, ymax+.1*(ymax-ymin)))
 
 
         plotCuts(self.radobj, ax)
-
 
 
     def plotFits(self, ax, plotFeature):
@@ -95,28 +94,33 @@ class RadFilPlotter(object):
                 if self.radobj.bgdist is not None:
                     xplot = self.radobj.xall
                     yplot = self.radobj.yall - self.radobj.bgfit(xplot)
+                    xlim=np.max(self.radobj.bgdist*1.5)
+
 
                 else:
                     xplot=self.radobj.xall
                     yplot=self.radobj.yall
+                    xlim=np.max(np.absolute(self.radobj.fitdist))*1.5
+
 
                 ## Plot model
                 #Adjust axis limit based on percentiles of data
                 #axis.set_xlim(np.min(self.radobj.xall), np.max(self.radobj.xall))
-                xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
-                if not self.radobj.wrap:
+                #xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
+
+                if not self.radobj.fold:
                     ax.set_xlim(-xlim,+xlim)
                 else:
                     ax.set_xlim(0., +xlim)
                 ax.set_ylim(np.nanpercentile(yplot,0)-np.abs(0.5*np.nanpercentile(yplot,0)),np.nanpercentile(yplot,99.9)+np.abs(0.25*np.nanpercentile(yplot,99.9)))
 
 
-                ax.plot(xplot, yplot, 'k.', markersize = 1., alpha = .1)
+                ax.plot(xplot, yplot, 'k.', markersize = 1., alpha=styles.get_scatter_alpha(len(self.radobj.xall))) 
                 if self.radobj.binning:
                     if self.radobj.bgdist is not None:
-                        plotbinx, plotbiny = np.ravel(zip(self.radobj.bins[:-1], self.radobj.bins[1:])), np.ravel(zip(self.radobj.mastery-self.radobj.bgfit(self.radobj.masterx), self.radobj.mastery-self.radobj.bgfit(self.radobj.masterx)))
+                        plotbinx, plotbiny = np.ravel(list(zip(self.radobj.bins[:-1], self.radobj.bins[1:]))), np.ravel(list(zip(self.radobj.mastery-self.radobj.bgfit(self.radobj.masterx), self.radobj.mastery-self.radobj.bgfit(self.radobj.masterx))))
                     else:
-                        plotbinx, plotbiny = np.ravel(zip(self.radobj.bins[:-1], self.radobj.bins[1:])), np.ravel(zip(self.radobj.mastery, self.radobj.mastery))
+                        plotbinx, plotbiny = np.ravel(list(zip(self.radobj.bins[:-1], self.radobj.bins[1:]))), np.ravel(list(zip(self.radobj.mastery, self.radobj.mastery)))
                     ax.plot(plotbinx, plotbiny,
                               'r-')
 
@@ -147,11 +151,11 @@ class RadFilPlotter(object):
                                       linewidth = 1.)
 
                 # Plot the predicted curve
-                ax.plot(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],200), self.radobj.profilefit(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],200)), 'b-', lw = 3., alpha = .6)
+                ax.plot(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],500), self.radobj.profilefit(np.linspace(ax.get_xlim()[0],ax.get_xlim()[1],500)), 'b-', lw = 3., alpha = .6)
 
 
-                ax.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.radobj.profilefit.param_names[0],self.radobj.profilefit.parameters[0],self.radobj.profilefit.param_names[1],self.radobj.profilefit.parameters[1],self.radobj.profilefit.param_names[2],self.radobj.profilefit.parameters[2]),ha='left',va='top', fontweight='bold',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
-                ax.text(0.97, 0.95,"{}\nFit".format(self.radobj.fitfunc.capitalize()), ha='right',va='top', color='blue',fontweight='bold',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                ax.text(0.03, 0.95,"{}={:.2E}\n{}={:.2f}\n{}={:.2f}".format(self.radobj.profilefit.param_names[0],self.radobj.profilefit.parameters[0],self.radobj.profilefit.param_names[1],self.radobj.profilefit.parameters[1],self.radobj.profilefit.param_names[2],self.radobj.profilefit.parameters[2]),ha='left',va='top', fontweight='bold',fontsize=20,transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                ax.text(0.97, 0.95,"{}\nFit".format(self.radobj.fitfunc.capitalize()), ha='right',va='top', color='blue',fontweight='bold', fontsize=20, transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
                 #ax.tick_params(labelsize=14)
 
 
@@ -160,18 +164,20 @@ class RadFilPlotter(object):
                 if self.radobj.bgdist is None:
                     raise ValueError('No bgfit in the radfil object. Rerun fit_profile.')
 
-                xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
-                if not self.radobj.wrap:
+                #xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
+                xlim=np.max(self.radobj.bgdist*1.5)
+
+                if not self.radobj.fold:
                     ax.set_xlim(-xlim,+xlim)
                 else:
                     ax.set_xlim(0., +xlim)
                 ax.set_ylim(np.nanpercentile(self.radobj.yall,0)-np.abs(0.5*np.nanpercentile(self.radobj.yall,0)),np.nanpercentile(self.radobj.yall,99.9)+np.abs(0.25*np.nanpercentile(self.radobj.yall,99.9)))
 
-                ax.plot(self.radobj.xall, self.radobj.yall, 'k.', markersize = 1., alpha = .1)
+                ax.plot(self.radobj.xall, self.radobj.yall, 'k.', markersize = 1., alpha=styles.get_scatter_alpha(len(self.radobj.xall))) 
 
                 ##########
                 if self.radobj.binning:
-                    plotbinx, plotbiny = np.ravel(zip(self.radobj.bins[:-1], self.radobj.bins[1:])), np.ravel(zip(self.radobj.mastery, self.radobj.mastery))
+                    plotbinx, plotbiny = np.ravel(list(zip(self.radobj.bins[:-1], self.radobj.bins[1:]))), np.ravel(list(zip(self.radobj.mastery, self.radobj.mastery)))
                     ax.plot(plotbinx, plotbiny,
                               'r-')
 
@@ -188,8 +194,8 @@ class RadFilPlotter(object):
                                   edgecolor = 'g',
                                   linestyle = '--',
                                   linewidth = 1.)
-                ax.plot(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 200), self.radobj.bgfit(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 200)),'g-', lw=3)
-                ax.set_xticklabels([])
+                ax.plot(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 500), self.radobj.bgfit(np.linspace(ax.get_xlim()[0], ax.get_xlim()[1], 500)),'g-', lw=3)
+                #ax.set_xticklabels([])
                 #ax.tick_params(labelsize=14)
 
                 xplot = self.radobj.xall
@@ -198,12 +204,12 @@ class RadFilPlotter(object):
 
                 #Add labels#
                 if self.radobj.bgfit.degree == 1:
-                    ax.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.radobj.bgfit.parameters[1],self.radobj.bgfit.parameters[0]),ha='left',va='top', fontweight='bold',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                    ax.text(0.03, 0.95,"y=({:.2E})x+({:.2E})".format(self.radobj.bgfit.parameters[1],self.radobj.bgfit.parameters[0]),ha='left',va='top', fontweight='bold',fontsize=20, transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
                 elif self.radobj.bgfit.degree == 0:
-                    ax.text(0.03, 0.95,"y=({:.2E})".format(self.radobj.bgfit.c0.value),ha='left',va='top', fontweight='bold',transform=ax.transAxes)
+                    ax.text(0.03, 0.95,"y=({:.2E})".format(self.radobj.bgfit.c0.value),ha='left',va='top', fontweight='bold',fontsize=20, transform=ax.transAxes)
                 else:
                     warnings.warn("Labeling BG functions of higher degrees during plotting are not supported yet.")
-                ax.text(0.97, 0.95,"Background\nFit", ha='right',va='top', fontweight='bold',color='green',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
+                ax.text(0.97, 0.95,"Background\nFit", ha='right',va='top', fontweight='bold',fontsize=20, color='green',transform=ax.transAxes)#,bbox={'facecolor':'white', 'edgecolor':'none', 'alpha':1.0, 'pad':1})
 
             else:
                 raise ValueError('plotFeature has to be either "model" or "bg".')
