@@ -433,6 +433,10 @@ class radfil(object):
 
             self.fig, self.ax = fig, ax
 
+            #Clip x-spline and y-spline so it doesn't extend outside image
+            xspline=np.clip(xspline,0,self.image.shape[1]-1)
+            yspline=np.clip(yspline,0,self.image.shape[0]-1)
+
             # Only points within pts_mask AND the original mask are used.
             if (self.pts_mask is not None):
                 pts_mask = ((self.pts_mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
@@ -442,7 +446,9 @@ class radfil(object):
             else:
                 pts_mask = (self.mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
                                       np.round(xspline[1:-1:self.samp_int]).astype(int)])
-
+            
+            
+            
             # Prepare for extracting the profiles
             self.xspline = xspline[1:-1:self.samp_int][pts_mask]
             self.yspline = yspline[1:-1:self.samp_int][pts_mask]
