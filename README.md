@@ -16,6 +16,12 @@ RadFil can be installed via pip:
 pip install radfil
 ```
 
+To upgrade:
+
+```
+pip install --upgrade radfil
+```
+
 To install from the repository, download the zip file from github and run the following in the top level of the directory:
 ```
 python setup.py install
