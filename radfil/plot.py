@@ -108,7 +108,7 @@ class RadFilPlotter(object):
                 #axis.set_xlim(np.min(self.radobj.xall), np.max(self.radobj.xall))
                 #xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
 
-                if not self.radobj.wrap:
+                if not self.radobj.fold:
                     ax.set_xlim(-xlim,+xlim)
                 else:
                     ax.set_xlim(0., +xlim)
@@ -167,7 +167,7 @@ class RadFilPlotter(object):
                 #xlim=np.max(np.absolute([np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],1),np.nanpercentile(self.radobj.xall[np.isfinite(self.radobj.yall)],99)]))
                 xlim=np.max(self.radobj.bgdist*1.5)
 
-                if not self.radobj.wrap:
+                if not self.radobj.fold:
                     ax.set_xlim(-xlim,+xlim)
                 else:
                     ax.set_xlim(0., +xlim)

@@ -32,6 +32,8 @@ Requires:
  *   scikit-learn
  *   scikit-image
  *   networkx
+ *   pandas
+
 
 Optional:
  *  <a href="https://github.com/e-koch/FilFinder">fil-finder</a> -- only required if you are *not* inputing a precomputed filament spine, and you want RadFil to use the fil_finder package to create one for you

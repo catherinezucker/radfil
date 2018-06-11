@@ -9,6 +9,8 @@ import types
 from scipy.interpolate import splprep, splev
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from copy import copy, deepcopy
+import pandas as pd
 
 import astropy.units as u
 import astropy.constants as c
@@ -40,9 +42,6 @@ class radfil(object):
         type and the same shape as the image array.
         A mask is optional ONLY if filspine is provided
 
-    beamwidth: float 
-        A float in units of arcseconds indicating the beamwidth of the image array.
-
     header : astropy.io.fits.Header
         The header corresponding to the image array
 
@@ -59,6 +58,10 @@ class radfil(object):
         In cases where the header is not in the standrad format, imgscale is
         specified.  This is overwritten when the header and proper header keys
         exist.
+    
+    beamwidth: 
+        A float in units of arcseconds indicating the beamwidth of the image array. If no header is provided, 
+        beamwidth is instead presumed to be in pixel units
 
     Attributes
     ----------
@@ -66,7 +69,7 @@ class radfil(object):
            The image scale in pc of each pixel
     """
 
-    def __init__(self, image, mask=None, header = None, distance = None, filspine = None, imgscale = None):
+    def __init__(self, image, mask=None, header = None, distance = None, filspine = None, imgscale = None, beamwidth=None):
 
         # Read image
         if (isinstance(image, np.ndarray)) and (image.ndim == 2):
@@ -109,55 +112,62 @@ class radfil(object):
             self.distance = None
             self.header = None
             warnings.warn("`header` and `distance` will not be used; all calculations in pixel units.")
-
-
+            
+        #Read Beamwidth
+        if isinstance(beamwidth, numbers.Number):
+            if (self.header is not None):
+                self.beamwidth = beamwidth * u.arcsec
+            else:
+                self.beamwidth = beamwidth * u.pix
+        else:
+            self.beamwidth = None
+            
         #if user enters a filspine argument (i.e. filspine!=None), make sure it's a 2D boolean array.
         # if it's not, raise an error
         if filspine is not None:
 
             if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)) and (filspine.dtype=='bool'):
                 self.filspine=filspine
-
-                # calculate "imgscale" when the spine is provided. This saves users
-                # the trouble to run `make_fil_spine`.
-                if (isinstance(filspine, np.ndarray) and (filspine.ndim == 2)):
-                    # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
-                    if (self.header is not None):
-                        if ("CDELT1" in list(self.header.keys())) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
-                            # `imgscale` in u.pc
-                            ## The change to u.pc has not been cleaned up for the rest of the code, yet.
-                            self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
-                        elif ("CD1_1" in list(self.header.keys())) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
-                            # `imgscale` in u.pc
-                            self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
-                        else:
-                            if isinstance(imgscale, numbers.Number):
-                                self.imgscale = float(imgscale) * u.pc
-                                warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
-                            else:
-                                self.imgscale = 1. * u.pix
-                                warnings.warn("Calculate in pixel scales.")
-                    ##
-                    else:
-                        self.imgscale = 1. * u.pix
-                        warnings.warn("Calculate in pixel scales.")
             else:
                 raise TypeError("If you input a filspine argument it must be a 2D array of boolean type")
         else:
             self.filspine = None
-            self.imgscale = None
+                
+        # Calculate pixel scale ("imgscale"), in the unit of pc/Deal with non-standard fits header
+        if (self.header is not None):
+            if ("CDELT1" in list(self.header.keys())) and (abs(self.header["CDELT1"]) == abs(self.header["CDELT2"])):
+                # `imgscale` in u.pc
+                ## The change to u.pc has not been cleaned up for the rest of the code, yet.
+                self.imgscale = abs(header["CDELT1"]) * (np.pi / 180.0) * self.distance
+            elif ("CD1_1" in list(self.header.keys())) and (abs(self.header["CD1_1"]) == abs(self.header["CD2_2"])):
+                # `imgscale` in u.pc
+                self.imgscale = abs(header["CD1_1"]) * (np.pi / 180.0) * self.distance
+            else:
+                if isinstance(imgscale, numbers.Number):
+                    self.imgscale = float(imgscale) * u.pc
+                    warnings.warn("The keyword `imgscale`, instead of the header, is used in calculations of physical distances.")
+                else:
+                    self.imgscale = 1. * u.pix
+                    warnings.warn("Calculate in pixel scales.")
+        ##
+        else:
+            self.imgscale = 1. * u.pix
+            warnings.warn("Calculate in pixel scales.")    
 
         # Return a dictionary to store the key setup Parameters
         params = {'image': self.image,
                   'mask': self.mask,
                   'header': self.header,
                   'distance': self.distance,
-                  'imgscale': self.imgscale}
+                  'imgscale': self.imgscale,
+                  'beamwidth': self.beamwidth}
         self._params = {'__init__': params}
 
         # Return a dictionary to store the results.
         self._results = {'make_fil_spine': {'filspine': self.filspine}}
-
+                
+    def __deepcopy__(self, memo):
+        return self
 
     def make_fil_spine(self,beamwidth = None,verbose = False):
 
@@ -177,69 +187,63 @@ class radfil(object):
            
         length: float
             The length of the filament; only accessible if make_fil_spine is called
+            
+        beamwidth: float 
+            A float in units of arcseconds indicating the beamwidth of the image array. 
+            Beamwidth is equired unless already provided above upon radfil_class object instantiation
+            If header is not provided, the beamwidth is assumed to be in pixels
         """
 
         try:
-            from fil_finder import fil_finder_2D
+            from fil_finder import FilFinder2D
 
         except ImportError:
             raise ImportError("To use this method, you must install the fil_finder package to continue.")
 
         # Read beamwidth
-        if isinstance(beamwidth, numbers.Number):
-            if (self.header is not None):
-                self.beamwidth = beamwidth * u.arcsec
-            else:
-                self.beamwidth = beamwidth * u.pix
-        else:
-            self.beamwidth = None
-            raise TypeError("A beamwidth is required")
+        if beamwidth is not None:
+            if isinstance(beamwidth, numbers.Number):
+                if (self.header is not None):
+                    self.beamwidth = beamwidth * u.arcsec
+                else:
+                    self.beamwidth = beamwidth * u.pix
 
+        #Check to make sure valid beamwidth is entered. Raise error if not. 
+        if self.beamwidth==None:
+            raise TypeError("A beamwidth is required to run this function")
 
         # fil_finder
-        ## Let fil_fineder deal with the beamwidth
-        if (self.header is not None):
-            fils = fil_finder_2D(self.image,
-                                 header = self.header,
+        fils = FilFinder2D(self.image, header = self.header,
                                  beamwidth = self.beamwidth,
                                  distance = self.distance,
                                  mask = self.mask)
-        ## scale-free
-        else:
-            fils = fil_finder_2D(self.image,
-                                 beamwidth = self.beamwidth,
-                                 skel_thresh = 15,
-                                 mask = self.mask)
-            ## 15 is chosen to be roughly 0.3 pc at the distance to Per B5 (260 pc).
-            ## Consider allowing users to input in the future.
 
         # do the skeletonization
         fils.medskel(verbose=verbose)
 
         # Find shortest path through skeleton
-        analysis = fils.analyze_skeletons(verbose=verbose)
+        fils.analyze_skeletons(verbose=verbose,skel_thresh=10*u.pix)
 
         # Return the reults.
         self.filspine = fils.skeleton_longpath.astype(bool)
         if (self.header is not None):
-            self.length = np.sum(analysis.lengths) * u.pc
-            self.imgscale = fils.imgscale * u.pc
+            self.length = np.sum(fils.lengths(u.pc))
         else:
-            self.length = np.sum(analysis.lengths) * u.pix
-            self.imgscale = fils.imgscale * u.pix
+            self.length = np.sum(fils.lengths(u.pix))
 
         # Return a dictionary to store the key setup Parameters
-        self._params['__init__']['imgscale'] = self.imgscale
+        #self._params['__init__']['imgscale'] = self.imgscale
         params = {'beamwidth': self.beamwidth}
         self._params['make_fil_spine'] = params
 
         # Return a dictionary to store the results
         self._results['make_fil_spine']['filspine'] = self.filspine
         self._results['make_fil_spine']['length'] = self.length
-
+        
         return self
 
-    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, wrap = False, make_cuts = True, cutdist=None):
+
+    def build_profile(self, pts_mask = None, samp_int=3, bins = None, shift = True, fold = False, make_cuts = True, cutdist=None):
         """
         Build the filament profile using the inputted or recently created filament spine
 
@@ -268,8 +272,8 @@ class radfil(object):
             by searching for the peak value along each cut, either confined within the filament mask,
             or confined within some value cutdist from the spine (if no mask is entered)
 
-        wrap: boolean (default = False)
-            Indicates whether to wrap around the central pixel, so that the final profile
+        fold: boolean (default = False)
+            Indicates whether to fold around the central pixel, so that the final profile
             will be a "half profile" with the peak near/at the center (depending on
             whether it's shifted).
 
@@ -311,17 +315,17 @@ class radfil(object):
         """
 
 
-        # Read shift, wrap, cut, and samp_int
+        # Read shift, fold, cut, and samp_int
         ## shift
         if isinstance(shift, bool):
             self.shift = shift
         else:
             raise TypeError("shift has to be a boolean value. See documentation.")
-        ## wrap
-        if isinstance(wrap, bool):
-            self.wrap = wrap
+        ## fold
+        if isinstance(fold, bool):
+            self.fold = fold
         else:
-            raise TypeError("wrap has to be a boolean value. See documentation.")
+            raise TypeError("fold has to be a boolean value. See documentation.")
         ## cut
         if isinstance(make_cuts, bool):
             self.cutting = make_cuts
@@ -409,6 +413,7 @@ class radfil(object):
             vmin, vmax = np.min(self.image[self.mask]), np.nanpercentile(self.image[self.mask], 98.)
             xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
             ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
+            
             ## plot
             fig=plt.figure(figsize=(10,5))
             ax=plt.gca()
@@ -428,6 +433,10 @@ class radfil(object):
 
             self.fig, self.ax = fig, ax
 
+            #Clip x-spline and y-spline so it doesn't extend outside image
+            xspline=np.clip(xspline,0,self.image.shape[1]-1)
+            yspline=np.clip(yspline,0,self.image.shape[0]-1)
+
             # Only points within pts_mask AND the original mask are used.
             if (self.pts_mask is not None):
                 pts_mask = ((self.pts_mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
@@ -437,7 +446,9 @@ class radfil(object):
             else:
                 pts_mask = (self.mask[np.round(yspline[1:-1:self.samp_int]).astype(int),
                                       np.round(xspline[1:-1:self.samp_int]).astype(int)])
-
+            
+            
+            
             # Prepare for extracting the profiles
             self.xspline = xspline[1:-1:self.samp_int][pts_mask]
             self.yspline = yspline[1:-1:self.samp_int][pts_mask]
@@ -449,7 +460,7 @@ class radfil(object):
             dictionary_cuts = defaultdict(list)
             if (self.imgscale.unit == u.pc):
                 for n in range(len(self.points)):
-                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
+                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, fold = self.fold)
                     cut_distance = profile[0]*self.imgscale.to(u.pc).value
                     dictionary_cuts['distance'].append(cut_distance) ## in pc
                     dictionary_cuts['profile'].append(profile[1])
@@ -459,7 +470,7 @@ class radfil(object):
 
             elif (self.imgscale.unit == u.pix):
                 for n in range(len(self.points)):
-                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, wrap = self.wrap)
+                    profile = profile_tools.profile_builder(self, self.points[n], self.fprime[n], shift = self.shift, fold = self.fold)
                     cut_distance = profile[0]*self.imgscale.to(u.pix).value  ## in pix
                     dictionary_cuts['distance'].append(cut_distance)
                     dictionary_cuts['profile'].append(profile[1])
@@ -483,10 +494,10 @@ class radfil(object):
             if (self.samp_int is not None):
                 self.samp_int = None
                 warnings.warn("samp_int is not used. make_cuts is False.")
-            ## warnings.warn if shift and/or wrap is True.
-            if (self.shift or (not self.wrap)):
-                warnings.warn("shift and/or wrap are not used. make_cuts is False.")
-                self.shift, self.wrap = False, True
+            ## warnings.warn if shift and/or fold is True.
+            if (self.shift or (not self.fold)):
+                warnings.warn("shift and/or fold are not used. make_cuts is False.")
+                self.shift, self.fold = False, True
 
             # Only points within pts_mask AND the original mask are used.
             if (self.pts_mask is not None):
@@ -516,6 +527,7 @@ class radfil(object):
             vmin, vmax = np.min(self.image[self.mask]), np.nanpercentile(self.image[self.mask], 98.)
             xmin, xmax = np.where(self.mask)[1].min(), np.where(self.mask)[1].max()
             ymin, ymax = np.where(self.mask)[0].min(), np.where(self.mask)[0].max()
+            
             ## plot
             fig=plt.figure(figsize=(10, 5))
             ax=plt.gca()
@@ -609,7 +621,7 @@ class radfil(object):
         params = {'cutting': self.cutting,
                   'binning': self.binning,
                   'shift': self.shift,
-                  'wrap': self.wrap,
+                  'fold': self.fold,
                   'bins': self.bins,
                   'samp_int': self.samp_int}
         self._params['build_profile'] = params
@@ -629,7 +641,7 @@ class radfil(object):
 
         return self
 
-    def fit_profile(self, bgdist = None, fitdist = None, fitfunc=None, verbose=False, beamwidth=None, bgdegree = 1):
+    def fit_profile(self, bgdist = None, fitdist = None, fitfunc=None, fix_mean=None, beamwidth=None, bgdegree = 1, verbose=True):
 
         """
         Fit a model to the filament's master profile
@@ -638,25 +650,34 @@ class radfil(object):
         ------
         self: An instance of the radfil_class
 
+        bgdist: tuple-like, with a shape (2,)
+            The radial distance range that defines the data points to be used in background subtraction; if None no background is fit
+
         fitdist: number-like or tuple-like with a length of 2
             The radial distance (in units of pc) out to which you'd like to fit your profile.
 
             When the input has a length of 2, data points with distances between the two values will be
             used in the fitting.  The negative direction is always to the left of the spline direction,
             which always runs from smaller axis-0 indices to larger axis-0 indices.
-
-        bgdist: tuple-like, with a shape (2,)
-            The radial distance range that defines the data points to be used in background subtraction; if None no background is fit
-
+            
         fitfunc: string
             Options include "Gaussian" or "Plummer"
+            
+        fix_mean: boolean
+            If fitfunc="Gaussian" this controls whether the mean of the Gaussian
+            is set to zero, or whether we fit for it along with the amplitude and standard deviation.
+            If this argument is not entered, it defaults to True if shift=True; otherwise it defaults to False. 
 
-        bgdegree: integer (default = 1)
-            The order of the polynomial used in background subtraction (options are 1 or 0).  Active only when wrap = False.
-
-        beamwidth: float or int
-            If not inputed into the make_fil_spine method, beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits
+        beamwidth: float (optional)
+            A float in units of arcseconds indicating the beamwidth of the image array. If not inputted earlier, 
+            beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits.
             If not provided, deconvolved FWHM values will be set to nan
+            
+        bgdegree: integer (default = 1)
+            The order of the polynomial used in background subtraction (options are 1 or 0).  Active only when fold = False.
+        
+        verbose: boolean (default = True)
+            Controls whether you want all the fitting related info (e.g. plots) printed to screen
 
         Attributes
         ------
@@ -674,9 +695,36 @@ class radfil(object):
             The fitting results.
             
         param_cov: the covariance matrix of the parameters
-
+        
+        std_error: standard errors on the best-fit parameters, derived from the covariance matrix
+        
         """
+        ## make sure fix_mean is a boolean if entered
+        if fix_mean is not None:
+            if isinstance(fix_mean, bool):
+                self.fix_mean = fix_mean
+            else:
+                raise TypeError("fix_mean has to be a boolean value. See documentation.")
+                
+                
+        ## make sure verbose is a boolean
+        if isinstance(verbose,bool)==False:
+            raise TypeError("verbose argument has to be a boolean value. See documentation.")        
+        
+        #If not entered, resort to default behavior (i.e. set to True if shift=True. Otherwise set to False)        
+        else:
+            if self.shift==True:
+                self.fix_mean=True
+            else:
+                self.fix_mean=False
+                
+        #Check to make sure bgdegree is 0 or 1:
+        if ((bgdegree==0) or (bgdegree==1)):
+            self.bgdegree=bgdegree
+        else:
+            raise TypeError("bgdegree must be either 0 or 1.")
 
+        
         #Check to make sure user entered valid function
         if isinstance(fitfunc, str):
             if (fitfunc.lower() == 'plummer') or (fitfunc.lower() == 'gaussian'):
@@ -688,21 +736,20 @@ class radfil(object):
             raise ValueError("Set a fitfunc; You have not entered a valid function. Input 'Gaussian' or 'Plummer'")
 
         #Check whether beamwidth already exists, or whether they have inputed one here to compute deconvolved FWHM
-        if (hasattr(self,'beamwith')==False) & (type(beamwidth)!=None):
+        # Read beamwidth
+        if beamwidth is not None:
             if isinstance(beamwidth, numbers.Number):
                 if (self.header is not None):
                     self.beamwidth = beamwidth * u.arcsec
                 else:
                     self.beamwidth = beamwidth * u.pix
-            else:
-                self.beamwidth = None
 
         # Mask for bg removal
         ## take only bgdist, which should be a 2-tuple or 2-list
         if np.asarray(bgdist).shape == (2,):
             self.bgdist = np.sort(bgdist)
             ## below can be merged... ##########
-            if self.wrap:
+            if self.fold:
                 maskbg = ((self.masterx >= self.bgdist[0])&\
                           (self.masterx < self.bgdist[1])&\
                           np.isfinite(self.mastery))
@@ -745,9 +792,9 @@ class radfil(object):
         # Fit for the background, and remove
         ## If bgdist (yes, background removal.)
         if np.asarray(self.bgdist).shape == (2,):
-            ## In the case where the profile is wrapped, simply take the mean in the background.
+            ## In the case where the profile is foldped, simply take the mean in the background.
             ## This is because that a linear fit (with a slope) with only one side is not definite.
-            if self.wrap:
+            if self.fold:
                 xbg, ybg = self.masterx, self.mastery
                 xbg, ybg = xbg[maskbg], ybg[maskbg]
                 self.xbg, self.ybg = xbg, ybg
@@ -762,8 +809,8 @@ class radfil(object):
                     self.nobsfit = self.masternobs[mask]
                 else:
                     self.nobsfit = None
-                print("The profile is wrapped. Use the 0th order polynomial in BG subtraction.")
-            ## A first-order bg removal is carried out only when the profile is not wrapped.
+                print("The profile is folded. Use the 0th order polynomial in BG subtraction.")
+            ## A first-order bg removal is carried out only when the profile is not foldped.
             else:
                 ## Fit bg
                 xbg, ybg = self.masterx, self.mastery
@@ -809,7 +856,7 @@ class radfil(object):
             g_init = models.Gaussian1D(amplitude = .8*np.max(self.yfit),
                                     mean = 0.,
                                     stddev=np.std(self.xfit),
-                                    fixed = {'mean': True},
+                                    fixed = {'mean': self.fix_mean},
                                     bounds = {'amplitude': (0., np.inf),
                                              'stddev': (0., np.inf)})
             fit_g = fitting.LevMarLSQFitter()
@@ -821,9 +868,15 @@ class radfil(object):
                 
             self.profilefit = g.copy()
             self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
-            print('==== Gaussian ====')
-            print(('amplitude: %.3E'%self.profilefit.parameters[0]))
-            print(('width: %.3f'%self.profilefit.parameters[2]))
+            self.std_error=np.sqrt(np.diag(self.param_cov))
+
+            
+            if verbose:
+                print('==== Gaussian ====')
+                print(('amplitude: %.3E'%self.profilefit.parameters[0]))
+                print(('mean: %.3f'%self.profilefit.parameters[1]))
+                print(('width: %.3f'%self.profilefit.parameters[2]))            
+                       
         ## Plummer-like model
         elif self.fitfunc == "plummer":
             g_init = Plummer1D(amplitude = .8*np.max(self.yfit),
@@ -837,12 +890,15 @@ class radfil(object):
                 g = fit_g(g_init, self.xfit, self.yfit)
             self.profilefit = g.copy()
             self.param_cov=fit_g.fit_info['param_cov'] #store covariance matrix of the parameters
+            self.std_error=np.sqrt(np.diag(self.param_cov))
             self.profilefit.parameters[2] = abs(self.profilefit.parameters[2]) #Make sure R_flat always positive
-            print('==== Plummer-like ====')
-            print(('amplitude: %.3E'%self.profilefit.parameters[0]))
-            print(('p: %.3f'%self.profilefit.parameters[1]))
-            print(('R_flat: %.3f'%self.profilefit.parameters[2]))
-
+                
+            if verbose:   
+                print('==== Plummer-like ====')
+                print(('amplitude: %.3E'%self.profilefit.parameters[0]))
+                print(('p: %.3f'%self.profilefit.parameters[1]))
+                print(('R_flat: %.3f'%self.profilefit.parameters[2]))
+            
         else:
             raise ValueError("Reset fitfunc; no valid function entered. Options include 'Gaussian' or 'Plummer'")
 
@@ -855,7 +911,7 @@ class radfil(object):
             #xlim=np.max(np.absolute([np.nanpercentile(self.xall[np.isfinite(self.yall)],1),np.nanpercentile(self.xall[np.isfinite(self.yall)],99)]))
             xlim=np.max(self.bgdist*1.5)
 
-            if not self.wrap:
+            if not self.fold:
                 axis.set_xlim(-xlim,+xlim)
             else:
                 axis.set_xlim(0., +xlim)
@@ -913,7 +969,7 @@ class radfil(object):
 
         ## Plot model
         #Adjust axis limit based on percentiles of data
-        if not self.wrap:
+        if not self.fold:
             axis.set_xlim(-xlim,+xlim)
         else:
             axis.set_xlim(0., +xlim)
@@ -986,6 +1042,7 @@ class radfil(object):
                    'yfit': self.yfit}
         self._results['fit_profile'] = results
 
+        #Calculate the FWHM and deconvolved FWHM if applicable
         if self.fitfunc == "gaussian":
             FWHM = 2.*np.sqrt(2.*np.log(2.))*self.profilefit.parameters[2]
 
@@ -993,7 +1050,9 @@ class radfil(object):
 
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
-                    print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
+                    if verbose:
+                        print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
+                    warnings.warn("The deconvolution procedure is not robust. Calculating deconvolved widths for the same data convolved with different beams will not produce identical values")
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
@@ -1004,9 +1063,10 @@ class radfil(object):
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
                     print(('Beamwidth in the Pixel Unit:', self.beamwidth))
+                    warnings.warn("The deconvolution procedure is not robust. Calculating deconvolved widths for the same data convolved with different beams will not produce identical values")
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
-                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.)
                     else:
                         FWHM_deconv = np.nan
                         warnings.warn("The width is not resolved.")
@@ -1026,7 +1086,9 @@ class radfil(object):
             if self.beamwidth is not None:
                 if (self.beamwidth.unit == u.arcsec) and (self.imgscale_ang is not None):
                     beamwidth_phys = (self.beamwidth/self.imgscale_ang).decompose()*self.imgscale.value
-                    print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
+                    if verbose:
+                        print(('Physical Size of the Beam:', beamwidth_phys*self.imgscale.unit))
+                    warnings.warn("The deconvolution procedure is not robust. Calculating deconvolved widths for the same data convolved with different beams will not produce identical values")
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
                         FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
@@ -1037,9 +1099,10 @@ class radfil(object):
                 elif (self.beamwidth.unit == u.pix):
                     beamwidth_phys = self.beamwidth.value
                     print(('Beamwidth in the Pixel Unit:', self.beamwidth))
+                    warnings.warn("The deconvolution procedure is not robust. Calculating deconvolved widths for the same data convolved with different beams will not produce identical values")
 
                     if np.isfinite(np.sqrt(FWHM**2.-beamwidth_phys**2.)):
-                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.).value
+                        FWHM_deconv = np.sqrt(FWHM**2.-beamwidth_phys**2.)
                     else:
                         FWHM_deconv = np.nan
                         warnings.warn("The width is not resolved.")
@@ -1053,6 +1116,9 @@ class radfil(object):
         self.FWHM, self.FWHM_deconv = FWHM, FWHM_deconv
         self._results['FWHM'] = FWHM
         self._results['FWHM_deconv'] = FWHM_deconv
+        
+        if verbose==False:
+            plt.close(fig)
 
         return self
 
@@ -1061,7 +1127,125 @@ class radfil(object):
         '''
         Return a `radfil.plot.RadFilPlotter` class.
         '''
-        #print "This is a feature under active development. Use at your own risk."
 
         from radfil import plot
         return plot.RadFilPlotter(self)
+
+
+    def calculate_systematic_uncertainty(self, fitfunc=None, bgdist_list=None, fitdist_list=None,fix_mean=None, beamwidth=None, bgdegree = None, verbose=False):
+        """
+        Calculate the systematic uncertainty on the best-fit values given different choices of 
+        background subtraction and fitting radii. RadFil will determine every combination of bglist and fitdist choices
+        and calculate the best-fit values in each case to derive the overall systematic uncertainty on each parameter
+
+        Parameters
+        ------
+        
+        bgdist_list: list
+            list of bgdist values (e.g. [[1,2],[2,3],3,4]]), for background subtraction radii options of 1 to 2 pc, 2 to 3 pc, and 3 to 4 pc.
+            See fit_profile() for more info on bgdist
+            
+        fitdist_list: list
+            list of fitdist values (e.g. [1,2,3]) for fitting radii options of 1, 2, and 3 pc. 
+            See fit_profile() for more info on fitdist
+
+        fitfunc: string
+            Options include "Gaussian" or "Plummer"
+            
+        fix_mean: boolean
+            If fitfunc="Gaussian" this controls whether the mean of the Gaussian
+            is set to zero, or whether we fit for it along with the amplitude and standard deviation.
+            If this argument is not entered, it defaults to True if shift=True; otherwise it defaults to False. 
+
+        beamwidth: float (optional)
+            A float in units of arcseconds indicating the beamwidth of the image array. If not inputted earlier, 
+            beamwidth needs to be provided to calculate deconvolved FWHM of Gaussian/Plummer Fits.
+            If not provided, deconvolved FWHM values will be set to nan
+            
+        bgdegree: integer (default = 1)
+            The order of the polynomial used in background subtraction (options are 1 or 0).  Active only when fold = False.
+        
+        Attributes
+        ------
+        radfil_trials: dictionary
+            A dictionary whose keys correspond to different parameters in the model.
+            Accessing these keys will return a pandas dataframe, where the rows correspond to
+            background subtraction radii and the columns correspond to fitting radii. Accessing a sell
+            in the dataframe will return the best-fit value for that parameter given the corresponding
+            fitdist and bgdist. 
+        """
+        
+    
+        # Make sure bgdist_list and fitdist_list are lists
+        if isinstance(bgdist_list, list):
+            self.bgdist_list = bgdist_list
+        else:
+            raise TypeError("bgdist_list has to be a list. See documentation.")
+            
+        if isinstance(fitdist_list, list):
+            self.fitdist_list = fitdist_list
+        else:
+            raise TypeError("fitdist_list has to be a list. See documentation.")
+        
+        #If no arguments are entered for fix_mean, bgdegree, fitfunc, and beamwidth, use those stored in passed radfil object
+        if fitfunc is None:
+            fitfunc=self.fitfunc
+        else:
+            fitfunc=fitfunc
+            
+        if fix_mean is None:
+            fixmean=self.fix_mean
+        else:
+            fix_mean=fix_mean
+            
+        if bgdegree is None:
+            bgdegree=self.bgdegree
+        else:
+            bgdegree=bgdegree
+                
+        if beamwidth is None:
+            beamwidth=self.beamwidth
+        else:
+            beamwidth=beamwidth
+            
+        ## make sure verbose is a boolean
+        if isinstance(verbose,bool)==False:
+            raise TypeError("verbose argument has to be a boolean value. See documentation.")       
+        
+        #Calculate all possible combinations for fitdist and bgdist given inputed lists
+        radfil_options=[(fitdist,bgdist) for fitdist in fitdist_list for bgdist in bgdist_list]
+        
+        #Make a copy of your current radfil object attributes, so the original fitting results are preserved
+        radfil_attr_copy={key:value for key, value in self.__dict__.items() if not key.startswith('__') and not callable(key)}
+
+        radfil_trials={}
+        for (fitdist,bgdist) in radfil_options:
+            self.fit_profile(bgdist = bgdist, fitdist = fitdist, fitfunc=fitfunc, fix_mean=fix_mean, beamwidth=beamwidth, bgdegree=bgdegree, verbose=False)
+            
+            #check if dictionary is empty
+            if bool(radfil_trials)==False:
+                for param in self.profilefit.param_names:
+                    df = pd.DataFrame(index=[str(bgdist) for bgdist in bgdist_list], columns=[str(fitdist) for fitdist in fitdist_list])
+                    df = df.fillna(0) # fill with nans for now
+                    radfil_trials[param]=df
+                for param in self.profilefit.param_names:
+                    df = pd.DataFrame(index=[str(bgdist) for bgdist in bgdist_list], columns=[str(fitdist) for fitdist in fitdist_list])
+                    radfil_trials[param]=df
+                                        
+            #fill each dataframe in dictionary with parameter results for given fitdist and bgdist
+            for (name,value) in zip(self.profilefit.param_names,self.profilefit.parameters):
+                radfil_trials[name][str(fitdist)][str(bgdist)]=value
+            
+        for param in radfil_trials:
+            print("====== {} results ======".format(param))
+            print(radfil_trials[param].to_string())
+            
+            
+        #reassign original attributes (this is a workaround--really should use deepcopy, but doesn't mesh well with user defined classes)
+        for key in radfil_attr_copy:
+            setattr(self,key,radfil_attr_copy[key])
+            
+        #now store trial results
+        self.radfil_trials=radfil_trials
+
+        return self
