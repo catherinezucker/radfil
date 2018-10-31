@@ -421,7 +421,7 @@ class radfil(object):
                       origin='lower',
                       cmap='gray',
                       interpolation='none',
-                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+                      norm = colors.Normalize(vmin = vmin, vmax =  vmax))
             ax.contourf(self.mask,
                         levels = [0., .5],
                         colors = 'w')
@@ -483,8 +483,8 @@ class radfil(object):
             self.dictionary_cuts = dictionary_cuts
             ## Plot the peak positions if shift
             if self.shift:
-                self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0],
-                             np.asarray(dictionary_cuts['plot_peaks'])[:, 1],
+                self.ax.plot(np.asarray(dictionary_cuts['plot_peaks'])[:, 0].astype(int),
+                             np.asarray(dictionary_cuts['plot_peaks'])[:, 1].astype(int),
                              'b.', markersize = 10.,alpha=0.75, markeredgecolor='white',markeredgewidth=0.5)
         # if no cutting
         else:
@@ -535,7 +535,7 @@ class radfil(object):
                       origin='lower',
                       cmap='gray',
                       interpolation='none',
-                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+                      norm = colors.Normalize(vmin = vmin, vmax =  vmax))
             ax.contourf(self.mask,
                         levels = [0., .5],
                         colors = 'w')

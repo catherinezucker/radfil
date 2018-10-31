@@ -17,7 +17,7 @@ def plotCuts(radobj, ax):
     if dictionary_cuts['plot_peaks'] is not None:
         toPlot = np.asarray(dictionary_cuts['plot_peaks'])
 
-        ax.plot(toPlot[:, 0], toPlot[:, 1], 'b.',
+        ax.plot(toPlot[:, 0].astype(int), toPlot[:, 1].astype(int), 'b.',
                 markersize = 12.,
                 alpha=0.75,
                 zorder = 999, markeredgecolor='white',markeredgewidth=0.5)
@@ -59,7 +59,7 @@ class RadFilPlotter(object):
                       origin='lower',
                       cmap='gray',
                       interpolation='none',
-                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+                      norm = colors.Normalize(vmin = vmin, vmax =  vmax))
             ax.contourf(self.radobj.mask,
                         levels = [0., .5],
                         colors = 'w')
@@ -74,7 +74,7 @@ class RadFilPlotter(object):
                       origin='lower',
                       cmap='gray',
                       interpolation='none',
-                      norm = colors.LogNorm(vmin = vmin, vmax =  vmax))
+                      norm = colors.Normalize(vmin = vmin, vmax =  vmax))
             ax.contourf(self.radobj.mask,
                         levels = [0., .5],
                         colors = 'w')
