@@ -17,6 +17,7 @@ import astropy.constants as c
 from astropy.modeling import models, fitting, polynomial
 from astropy.stats import sigma_clip
 from astropy.io import fits
+import astropy
 import shapely.geometry as geometry
 from shapely.geometry import LineString
 import matplotlib.colors as colors
@@ -823,7 +824,13 @@ class radfil(object):
                 fit_bg_or = fitting.FittingWithOutlierRemoval(fit_bg, sigma_clip,
                                                               niter=10, sigma=3.)
                 bg = fit_bg(bg_init, self.xbg, self.ybg)
-                data_or, bg_or = fit_bg_or(bg_init, self.xbg, self.ybg)
+                
+                #astropy 2 and astropy 3 return objects in different order
+                if int(astropy.__version__[0]) < 3:
+                    data_or, bg_or = fit_bg_or(bg_init, self.xbg, self.ybg)
+                else:
+                    bg_or, data_or = fit_bg_or(bg_init, self.xbg, self.ybg)
+
                 self.bgfit = bg_or.copy()
                 self.ybg_filtered = data_or ## a masked array returned by the outlier removal
 
