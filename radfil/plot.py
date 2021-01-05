@@ -46,7 +46,7 @@ class RadFilPlotter(object):
     def plotCuts(self, ax, savefig = False):
 
         ## prepare
-        vmin, vmax = np.min(self.radobj.image[self.radobj.mask]), np.nanpercentile(self.radobj.image[self.radobj.mask], 98.)
+        vmin, vmax = np.nanmin(self.radobj.image[self.radobj.mask]), np.nanpercentile(self.radobj.image[self.radobj.mask], 98.)
         xmin, xmax = np.where(self.radobj.mask)[1].min(), np.where(self.radobj.mask)[1].max()
         ymin, ymax = np.where(self.radobj.mask)[0].min(), np.where(self.radobj.mask)[0].max()
 
