@@ -32,7 +32,10 @@ def curveorder(x,y):
     pts=np.vstack((x,y)).T
 
     # initiate the NN2 and the network graph
-    clf = NearestNeighbors(2).fit(pts)
+    try:
+        clf = NearestNeighbors(2).fit(pts)
+    except:
+        clf = NearestNeighbors(n_neighbors = 2).fit(pts)    
     G = clf.kneighbors_graph()
     T = nx.from_scipy_sparse_matrix(G)
 
