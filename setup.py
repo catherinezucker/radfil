@@ -17,7 +17,7 @@ setup(
       'matplotlib',
       'astropy',
       'shapely',
-      'sklearn',
+      'scikit-learn',
       'scikit-image',
       'networkx',
       'pandas'
