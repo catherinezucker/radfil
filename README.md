@@ -54,4 +54,4 @@ Optional:
  
  Questions? Comments?
 --------------------
-The RadFil package has been developed by Catherine Zucker (czucker@stsci.edu) and Hope Chen. If you find a bug, have questions, or would like to request a new feature, please feel free to send us an email or raise an issue in the github repository. We'd love to hear from you!
+The RadFil package has been developed by Catherine Zucker (catherine.zucker@cfa.harvard.edu) and Hope Chen. If you find a bug, have questions, or would like to request a new feature, please feel free to send us an email or raise an issue in the github repository. We'd love to hear from you!
